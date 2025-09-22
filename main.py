@@ -1,6 +1,8 @@
 import pygame
 import sys
 import random
+import json
+import os
 
 pygame.init()
 WIDTH, HEIGHT = 800, 400
@@ -23,8 +25,72 @@ except:
 PADDLE_WIDTH, PADDLE_HEIGHT = 10, 60
 BALL_SIZE = 10
 DIFFICULTY_SPEED = {"E": 5, "C": 8, "A": 10}
+MAX_LEADERBOARD = 10
 
 stars = [(random.randint(0, WIDTH), random.randint(0, HEIGHT)) for _ in range(150)]
+
+# ----- Leaderboard Functions -----
+
+def load_leaderboard():
+    if os.path.exists("highscores.json"):
+        with open("highscores.json", "r") as f:
+            highscores = json.load(f)
+            return sorted(highscores, key=lambda x: x[1], reverse=True)
+    return []
+
+def save_leaderboard(highscores):
+    with open("highscores.json", "w") as f:
+        json.dump(sorted(highscores, key=lambda x: x[1], reverse=True)[:MAX_LEADERBOARD], f)
+
+def add_score(name, score):
+    highscores = load_leaderboard()
+    highscores.append((name, score))
+    highscores = sorted(highscores, key=lambda x: x[1], reverse=True)[:MAX_LEADERBOARD]
+    save_leaderboard(highscores)
+
+def show_leaderboard(display_time=0):
+    highscores = load_leaderboard()
+    WIN.fill((0, 0, 0))
+    title = FONT.render("LEADERBOARD", True, GREEN)
+    WIN.blit(title, (WIDTH//2 - title.get_width()//2, 70))
+    for idx, (name, score) in enumerate(highscores):
+        entry = MENU_FONT.render(f"{idx+1}. {name.upper()}  {score}", True, WHITE)
+        WIN.blit(entry, (WIDTH//2 - entry.get_width()//2, 140 + idx*30))
+    pygame.display.update()
+    if display_time:
+        pygame.time.wait(display_time)
+
+def text_input(prompt, max_length=8):
+    input_box = pygame.Rect(WIDTH//2 - 100, HEIGHT//2 + 40, 200, 40)
+    color_active = NEON_BLUE
+    color_passive = WHITE
+    color = color_passive
+    active = True
+    text = ''
+    run_input = True
+    while run_input:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN and active:
+                if event.key == pygame.K_RETURN:
+                    return text[:max_length]
+                elif event.key == pygame.K_BACKSPACE:
+                    text = text[:-1]
+                elif len(text) < max_length:
+                    char = event.unicode
+                    if char.isprintable() and not char.isspace():
+                        text += char
+        WIN.fill((0,0,0))
+        msg = FONT.render(prompt, True, GREEN)
+        WIN.blit(msg, (WIDTH//2 - msg.get_width()//2, HEIGHT//2 - 50))
+        txt_surface = MENU_FONT.render(text, True, WHITE)
+        WIN.blit(txt_surface, (input_box.x+5, input_box.y+5))
+        pygame.draw.rect(WIN, color_active if active else color_passive, input_box, 2)
+        pygame.display.update()
+
+# ----- Game Classes and Functions -----
 
 class Paddle:
     def __init__(self, x, y):
@@ -161,11 +227,15 @@ def main_game(difficulty="E", max_points=5, two_player=True):
         draw_window(paddle1, paddle2, ball, score1, score2)
 
         # Win check
+        winner_text = None
+        winner_score = None
         if score1 >= max_points:
             winner_text = "PLAYER 1 WINS!"
+            winner_score = score1
             run = False
         elif score2 >= max_points:
             winner_text = "PLAYER 2 WINS!" if two_player else "AI WINS!"
+            winner_score = score2
             run = False
 
     # Display winner
@@ -173,7 +243,17 @@ def main_game(difficulty="E", max_points=5, two_player=True):
     text = FONT.render(winner_text, True, GREEN)
     WIN.blit(text, (WIDTH//2 - text.get_width()//2, HEIGHT//2 - text.get_height()//2))
     pygame.display.update()
-    pygame.time.delay(3000)
+    pygame.time.delay(1500)
+
+    # Prompt player for initials if they won (score qualifies)
+    if winner_score is not None:
+        highscores = load_leaderboard()
+        if len(highscores) < MAX_LEADERBOARD or winner_score > highscores[-1][1]:
+            initials = text_input("Enter your initials:", max_length=8)
+            add_score(initials, winner_score)
+            show_leaderboard(2500)
+        else:
+            show_leaderboard(1500)
 
 def main_menu():
     run = True
@@ -198,6 +278,9 @@ def main_menu():
         start_text = MENU_FONT.render("Press ENTER to Start", True, GREEN)
         WIN.blit(start_text, (WIDTH//2 - start_text.get_width()//2, 300))
 
+        leaderboard_text = MENU_FONT.render("L: Leaderboard", True, WHITE)
+        WIN.blit(leaderboard_text, (WIDTH//2 - leaderboard_text.get_width()//2, 340))
+
         pygame.display.update()
 
         for event in pygame.event.get():
@@ -221,5 +304,7 @@ def main_menu():
                 if event.key == pygame.K_DOWN:
                     if max_points > 1:
                         max_points -= 1
+                if event.key == pygame.K_l:
+                    show_leaderboard(2000)
 
 main_menu()
