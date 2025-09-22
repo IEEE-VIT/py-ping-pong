@@ -35,7 +35,12 @@ class Paddle:
         pygame.draw.rect(WIN, NEON_BLUE, self.rect)
 
     def move(self, up=True):
-        self.rect.y -= self.speed if up else -self.speed
+        # clearer movement logic
+        if up:
+            self.rect.y -= self.speed
+        else:
+            self.rect.y += self.speed
+
         if self.rect.top < 0: self.rect.top = 0
         if self.rect.bottom > HEIGHT: self.rect.bottom = HEIGHT
 
@@ -47,14 +52,23 @@ class Ball:
 
     def reset(self):
         self.rect.center = (WIDTH//2, HEIGHT//2)
+        self.speed_x = 0
+        self.speed_y = 0
+        self.base_speed = DIFFICULTY_SPEED[self.difficulty]
+        # Set speeds only when unpaused, so init with zero for pause
+        self.ready_to_move = False
+
+    def start_movement(self):
         self.speed_x = random.choice([-1, 1]) * random.randint(4, 6)
         self.speed_y = random.choice([-1, 1]) * random.randint(2, 4)
-        self.base_speed = DIFFICULTY_SPEED[self.difficulty]
+        self.ready_to_move = True
 
     def draw(self):
         pygame.draw.rect(WIN, GREEN, self.rect)
 
     def move(self):
+        if not self.ready_to_move:
+            return
         self.rect.x += self.speed_x
         self.rect.y += self.speed_y
         if self.rect.top <= 0 or self.rect.bottom >= HEIGHT:
@@ -66,7 +80,7 @@ class Ball:
             if abs(self.speed_y) < 15:
                 self.speed_y *= 1.001
 
-def draw_window(paddle1, paddle2, ball, score1, score2):
+def draw_window(paddle1, paddle2, ball, score1, score2, show_ready=False):
     WIN.fill((0, 0, 0))  # Black background
     # Draw stars
     for star in stars:
@@ -80,6 +94,10 @@ def draw_window(paddle1, paddle2, ball, score1, score2):
     # Draw scores
     score_text = FONT.render(f"{score1}  |  {score2}", True, WHITE)
     WIN.blit(score_text, (WIDTH//2 - score_text.get_width()//2, 10))
+    # Show "Get Ready!" message if needed
+    if show_ready:
+        ready_text = FONT.render("GET READY!", True, GREEN)
+        WIN.blit(ready_text, (WIDTH//2 - ready_text.get_width()//2, HEIGHT//2 - ready_text.get_height()//2))
     pygame.display.update()
 
 def main_game(difficulty="E", max_points=5, two_player=True):
@@ -91,6 +109,14 @@ def main_game(difficulty="E", max_points=5, two_player=True):
     score1, score2 = 0, 0
     run = True
 
+    # Control pause between points
+    pause_after_score = False
+    pause_start_time = 0
+    pause_duration = 2500  # milliseconds
+
+    # Start with ball moving immediately
+    ball.start_movement()
+
     while run:
         clock.tick(FPS)
         for event in pygame.event.get():
@@ -99,41 +125,54 @@ def main_game(difficulty="E", max_points=5, two_player=True):
                 sys.exit()
 
         keys = pygame.key.get_pressed()
-        # Player 1 movement
-        if keys[pygame.K_w]:
-            paddle1.move(up=True)
-        if keys[pygame.K_s]:
-            paddle1.move(up=False)
-        # Player 2 movement
-        if two_player:
-            if keys[pygame.K_UP]:
-                paddle2.move(up=True)
-            if keys[pygame.K_DOWN]:
-                paddle2.move(up=False)
+        if not pause_after_score:
+            # Player 1 movement
+            if keys[pygame.K_w]:
+                paddle1.move(up=True)
+            if keys[pygame.K_s]:
+                paddle1.move(up=False)
+            # Player 2 movement
+            if two_player:
+                if keys[pygame.K_UP]:
+                    paddle2.move(up=True)
+                if keys[pygame.K_DOWN]:
+                    paddle2.move(up=False)
+            else:
+                # Simple AI
+                if paddle2.rect.centery < ball.rect.centery:
+                    paddle2.move(up=False)
+                elif paddle2.rect.centery > ball.rect.centery:
+                    paddle2.move(up=True)
+
+            ball.move()
+
+            # Ball collision with paddles
+            if ball.rect.colliderect(paddle1.rect):
+                ball.speed_x *= -1
+                ball.rect.left = paddle1.rect.right  # avoid sticking
+            if ball.rect.colliderect(paddle2.rect):
+                ball.speed_x *= -1
+                ball.rect.right = paddle2.rect.left
+
+            # Score update
+            if ball.rect.left <= 0:
+                score2 += 1
+                ball.reset()
+                pause_after_score = True
+                pause_start_time = pygame.time.get_ticks()
+            if ball.rect.right >= WIDTH:
+                score1 += 1
+                ball.reset()
+                pause_after_score = True
+                pause_start_time = pygame.time.get_ticks()
         else:
-            # Simple AI
-            if paddle2.rect.centery < ball.rect.centery:
-                paddle2.move(up=False)
-            elif paddle2.rect.centery > ball.rect.centery:
-                paddle2.move(up=True)
+            # During pause, check if time elapsed to resume ball movement
+            current_time = pygame.time.get_ticks()
+            if current_time - pause_start_time >= pause_duration:
+                pause_after_score = False
+                ball.start_movement()
 
-        ball.move()
-
-        # Ball collision with paddles
-        if ball.rect.colliderect(paddle1.rect):
-            ball.speed_x *= -1
-        if ball.rect.colliderect(paddle2.rect):
-            ball.speed_x *= -1
-
-        # Score update
-        if ball.rect.left <= 0:
-            score2 += 1
-            ball.reset()
-        if ball.rect.right >= WIDTH:
-            score1 += 1
-            ball.reset()
-
-        draw_window(paddle1, paddle2, ball, score1, score2)
+        draw_window(paddle1, paddle2, ball, score1, score2, show_ready=pause_after_score)
 
         # Win check
         if score1 >= max_points:
