@@ -9,7 +9,7 @@ from datetime import datetime
 pygame.init()
 WIDTH, HEIGHT = 800, 400
 WIN = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Pixel Ping Pong - Space Edition (With Leaderboard)")
+pygame.display.set_caption("Pixel Ping Pong - Space Edition (With Leaderboard + Pause)")
 FPS = 60
 
 WHITE = (255, 255, 255)
@@ -63,6 +63,9 @@ class Ball:
         self.speed_y = 0
         self.base_speed = DIFFICULTY_SPEED[self.difficulty]
         self.ready_to_move = False
+        # used to store speeds when pausing
+        self._saved_speed_x = 0
+        self._saved_speed_y = 0
 
     def start_movement(self):
         self.speed_x = random.choice([-1, 1]) * random.randint(4, 6)
@@ -84,6 +87,24 @@ class Ball:
                 self.speed_x *= 1.001
             if abs(self.speed_y) < 15:
                 self.speed_y *= 1.001
+
+    def pause(self):
+        # Save current movement and stop
+        self._saved_speed_x = self.speed_x
+        self._saved_speed_y = self.speed_y
+        self.ready_to_move = False
+        self.speed_x = 0
+        self.speed_y = 0
+
+    def resume(self):
+        # Restore saved movement
+        self.speed_x = self._saved_speed_x
+        self.speed_y = self._saved_speed_y
+        # If saved speeds were zero (e.g., just after reset), start fresh
+        if self.speed_x == 0 and self.speed_y == 0:
+            self.start_movement()
+        else:
+            self.ready_to_move = True
 
 # ---------- Leaderboard Utilities ----------
 
@@ -125,7 +146,7 @@ def add_score_to_leaderboard(name, points, mode):
 
 # ---------- UI Helpers ----------
 
-def draw_window(paddle1, paddle2, ball, score1, score2, show_ready=False):
+def draw_window(paddle1, paddle2, ball, score1, score2, show_ready=False, paused=False):
     WIN.fill((0, 0, 0))
     for star in stars:
         pygame.draw.circle(WIN, STAR_COLOR, star, 1)
@@ -139,6 +160,14 @@ def draw_window(paddle1, paddle2, ball, score1, score2, show_ready=False):
     if show_ready:
         ready_text = FONT.render("GET READY!", True, GREEN)
         WIN.blit(ready_text, (WIDTH//2 - ready_text.get_width()//2, HEIGHT//2 - ready_text.get_height()//2))
+    if paused:
+        # translucent overlay
+        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 150))
+        WIN.blit(overlay, (0, 0))
+        render_centered_text("PAUSED", FONT, HEIGHT//2 - 80)
+        render_centered_text("Resume: P / R / ENTER", MENU_FONT, HEIGHT//2)
+        render_centered_text("Quit: Q", MENU_FONT, HEIGHT//2 + 30)
     pygame.display.update()
 
 
@@ -212,7 +241,7 @@ def show_leaderboard_screen():
         WIN.blit(hint, (WIDTH//2 - hint.get_width()//2, HEIGHT - 50))
         pygame.display.update()
 
-# ---------- Main Game Loop with Leaderboard Check ----------
+# ---------- Main Game Loop with Leaderboard Check (with Pause) ----------
 
 def main_game(difficulty="E", max_points=5, two_player=True):
     clock = pygame.time.Clock()
@@ -227,6 +256,8 @@ def main_game(difficulty="E", max_points=5, two_player=True):
     pause_start_time = 0
     pause_duration = 2500
 
+    paused = False
+
     ball.start_movement()
 
     while run:
@@ -235,19 +266,38 @@ def main_game(difficulty="E", max_points=5, two_player=True):
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
+            if event.type == pygame.KEYDOWN:
+                # Toggle pause with P
+                if event.key == pygame.K_p:
+                    paused = not paused
+                    if paused:
+                        ball.pause()
+                    else:
+                        ball.resume()
+                # While paused, allow quick resume/quit
+                if paused:
+                    if event.key == pygame.K_r or event.key == pygame.K_RETURN:
+                        paused = False
+                        ball.resume()
+                    if event.key == pygame.K_q:
+                        pygame.quit()
+                        sys.exit()
 
         keys = pygame.key.get_pressed()
-        if not pause_after_score:
+        if not paused and not pause_after_score:
+            # Player 1 movement
             if keys[pygame.K_w]:
                 paddle1.move(up=True)
             if keys[pygame.K_s]:
                 paddle1.move(up=False)
+            # Player 2 movement
             if two_player:
                 if keys[pygame.K_UP]:
                     paddle2.move(up=True)
                 if keys[pygame.K_DOWN]:
                     paddle2.move(up=False)
             else:
+                # Simple AI
                 if paddle2.rect.centery < ball.rect.centery:
                     paddle2.move(up=False)
                 elif paddle2.rect.centery > ball.rect.centery:
@@ -255,13 +305,15 @@ def main_game(difficulty="E", max_points=5, two_player=True):
 
             ball.move()
 
+            # Ball collision with paddles
             if ball.rect.colliderect(paddle1.rect):
                 ball.speed_x *= -1
-                ball.rect.left = paddle1.rect.right
+                ball.rect.left = paddle1.rect.right  # avoid sticking
             if ball.rect.colliderect(paddle2.rect):
                 ball.speed_x *= -1
                 ball.rect.right = paddle2.rect.left
 
+            # Score update
             if ball.rect.left <= 0:
                 score2 += 1
                 ball.reset()
@@ -273,13 +325,15 @@ def main_game(difficulty="E", max_points=5, two_player=True):
                 pause_after_score = True
                 pause_start_time = pygame.time.get_ticks()
         else:
+            # During pause between points, check if time elapsed to resume ball movement
             current_time = pygame.time.get_ticks()
-            if current_time - pause_start_time >= pause_duration:
+            if not paused and pause_after_score and (current_time - pause_start_time >= pause_duration):
                 pause_after_score = False
                 ball.start_movement()
 
-        draw_window(paddle1, paddle2, ball, score1, score2, show_ready=pause_after_score)
+        draw_window(paddle1, paddle2, ball, score1, score2, show_ready=pause_after_score, paused=paused)
 
+        # Win check
         if score1 >= max_points:
             winner_text = "PLAYER 1 WINS!"
             winner = 1
@@ -288,6 +342,13 @@ def main_game(difficulty="E", max_points=5, two_player=True):
             winner_text = "PLAYER 2 WINS!" if two_player else "AI WINS!"
             winner = 2
             run = False
+
+    # Display winner
+    WIN.fill((0, 0, 0))
+    text = FONT.render(winner_text, True, GREEN)
+    WIN.blit(text, (WIDTH//2 - text.get_width()//2, HEIGHT//2 - text.get_height()//2))
+    pygame.display.update()
+    pygame.time.delay(3000)
 
     # Show winner and check leaderboard
     WIN.fill((0, 0, 0))
@@ -351,6 +412,9 @@ def main_menu():
 
         leader_text = MENU_FONT.render("Press L to view Leaderboard", True, WHITE)
         WIN.blit(leader_text, (WIDTH//2 - leader_text.get_width()//2, 330))
+
+        pause_tip = MENU_FONT.render("Press P to Pause during match", True, WHITE)
+        WIN.blit(pause_tip, (WIDTH//2 - pause_tip.get_width()//2, 360))
 
         pygame.display.update()
 
