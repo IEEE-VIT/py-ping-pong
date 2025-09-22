@@ -221,3 +221,4 @@ def main_menu():
                         max_points -= 1
 
 main_menu()
+print('Issue Resolved')
