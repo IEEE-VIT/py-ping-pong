@@ -90,34 +90,41 @@ def main_game(difficulty="E", max_points=5, two_player=True):
 
     score1, score2 = 0, 0
     run = True
-
+    paused=False
     while run:
         clock.tick(FPS)
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
 
         keys = pygame.key.get_pressed()
-        # Player 1 movement
-        if keys[pygame.K_w]:
-            paddle1.move(up=True)
-        if keys[pygame.K_s]:
-            paddle1.move(up=False)
-        # Player 2 movement
-        if two_player:
-            if keys[pygame.K_UP]:
-                paddle2.move(up=True)
-            if keys[pygame.K_DOWN]:
-                paddle2.move(up=False)
-        else:
-            # Simple AI
-            if paddle2.rect.centery < ball.rect.centery:
-                paddle2.move(up=False)
-            elif paddle2.rect.centery > ball.rect.centery:
-                paddle2.move(up=True)
+        
+        if keys[pygame.K_ESCAPE]:
+            paused=not paused
+            pygame.time.delay(100)
 
-        ball.move()
+        if not paused:
+            # Player 1 movement
+            if keys[pygame.K_w]:
+                paddle1.move(up=True)
+            if keys[pygame.K_s]:
+                paddle1.move(up=False)
+            # Player 2 movement
+            if two_player:
+                if keys[pygame.K_UP]:
+                    paddle2.move(up=True)
+                if keys[pygame.K_DOWN]:
+                    paddle2.move(up=False)
+            else:
+                # Simple AI
+                if paddle2.rect.centery < ball.rect.centery:
+                    paddle2.move(up=False)
+                elif paddle2.rect.centery > ball.rect.centery:
+                    paddle2.move(up=True)
+
+            ball.move()
 
         # Ball collision with paddles
         if ball.rect.colliderect(paddle1.rect):

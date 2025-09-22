@@ -42,6 +42,8 @@ A retro-style, neon-themed ping pong game built with **Python** and **Pygame**. 
 - Toggle Mode: `M`
 - Adjust Max Points: `UP ARROW` / `DOWN ARROW`
 
+- Press Escape for pausing
+
 ## Getting Started:
 
 1. Fork and clone the repository
