@@ -211,6 +211,27 @@ def show_leaderboard_screen():
         WIN.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT - 50))
         pygame.display.update()
 
+# ---------- Pause Menu ----------
+def pause_menu():
+    paused = True
+    while paused:
+        WIN.fill((0, 0, 0))
+        render_centered_text("GAME PAUSED", FONT, 100)
+        render_centered_text("Press R to Resume", MENU_FONT, 180)
+        render_centered_text("Press Q to Quit", MENU_FONT, 220)
+        pygame.display.update()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_r:
+                    paused = False
+                if event.key == pygame.K_q:
+                    pygame.quit()
+                    sys.exit()
+
 # ---------- Main Game Loop with Leaderboard Check ----------
 def main_game(difficulty="E", max_points=5, two_player=True):
     clock = pygame.time.Clock()
@@ -232,6 +253,9 @@ def main_game(difficulty="E", max_points=5, two_player=True):
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_p:  # Press P to pause
+                    pause_menu()
 
         keys = pygame.key.get_pressed()
         if not pause_after_score:
@@ -343,6 +367,9 @@ def main_menu():
 
         leader_text = MENU_FONT.render("Press L to view Leaderboard", True, WHITE)
         WIN.blit(leader_text, (WIDTH // 2 - leader_text.get_width() // 2, 330))
+
+        pause_text = MENU_FONT.render("Press P to Pause in-game", True, GREEN)
+        WIN.blit(pause_text, (WIDTH // 2 - pause_text.get_width() // 2, 360))
 
         pygame.display.update()
 
