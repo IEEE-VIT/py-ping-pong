@@ -7,8 +7,9 @@ from datetime import datetime
 
 # ---------- Configuration ----------
 pygame.init()
-WIDTH, HEIGHT = 800, 400
-WIN = pygame.display.set_mode((WIDTH, HEIGHT))
+BASE_WIDTH, BASE_HEIGHT = 800, 400  # Base resolution
+WIDTH, HEIGHT = BASE_WIDTH, BASE_HEIGHT
+WIN = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
 pygame.display.set_caption("Pixel Ping Pong - Space Edition (With Leaderboard)")
 FPS = 60
 
@@ -31,7 +32,29 @@ PADDLE_WIDTH, PADDLE_HEIGHT = 10, 60
 BALL_SIZE = 10
 DIFFICULTY_SPEED = {"E": 5, "C": 8, "A": 5}
 
-stars = [(random.randint(0, WIDTH), random.randint(0, HEIGHT)) for _ in range(150)]
+stars = [(random.randint(0, BASE_WIDTH), random.randint(0, BASE_HEIGHT)) for _ in range(150)]
+
+
+# ---------- Scaling Utilities ----------
+def get_scale_factors():
+    return WIDTH / BASE_WIDTH, HEIGHT / BASE_HEIGHT
+
+
+def scale_rect(rect):
+    """Return a scaled copy of a rect for rendering"""
+    scale_x, scale_y = get_scale_factors()
+    return pygame.Rect(
+        int(rect.x * scale_x),
+        int(rect.y * scale_y),
+        int(rect.width * scale_x),
+        int(rect.height * scale_y),
+    )
+
+
+def scale_pos(x, y):
+    scale_x, scale_y = get_scale_factors()
+    return int(x * scale_x), int(y * scale_y)
+
 
 # ---------- Game Objects ----------
 class Paddle:
@@ -40,7 +63,7 @@ class Paddle:
         self.speed = 7
 
     def draw(self):
-        pygame.draw.rect(WIN, NEON_BLUE, self.rect)
+        pygame.draw.rect(WIN, NEON_BLUE, scale_rect(self.rect))
 
     def move(self, up=True):
         if up:
@@ -50,18 +73,18 @@ class Paddle:
 
         if self.rect.top < 0:
             self.rect.top = 0
-        if self.rect.bottom > HEIGHT:
-            self.rect.bottom = HEIGHT
+        if self.rect.bottom > BASE_HEIGHT:
+            self.rect.bottom = BASE_HEIGHT
 
 
 class Ball:
     def __init__(self, difficulty="E"):
-        self.rect = pygame.Rect(WIDTH // 2, HEIGHT // 2, BALL_SIZE, BALL_SIZE)
+        self.rect = pygame.Rect(BASE_WIDTH // 2, BASE_HEIGHT // 2, BALL_SIZE, BALL_SIZE)
         self.difficulty = difficulty
         self.reset()
 
     def reset(self):
-        self.rect.center = (WIDTH // 2, HEIGHT // 2)
+        self.rect.center = (BASE_WIDTH // 2, BASE_HEIGHT // 2)
         self.speed_x = 0
         self.speed_y = 0
         self.base_speed = DIFFICULTY_SPEED[self.difficulty]
@@ -73,20 +96,21 @@ class Ball:
         self.ready_to_move = True
 
     def draw(self):
-        pygame.draw.rect(WIN, GREEN, self.rect)
+        pygame.draw.rect(WIN, GREEN, scale_rect(self.rect))
 
     def move(self):
         if not self.ready_to_move:
             return
         self.rect.x += self.speed_x
         self.rect.y += self.speed_y
-        if self.rect.top <= 0 or self.rect.bottom >= HEIGHT:
+        if self.rect.top <= 0 or self.rect.bottom >= BASE_HEIGHT:
             self.speed_y *= -1
         if self.difficulty == "A":
             if abs(self.speed_x) < 15:
                 self.speed_x *= 1.001
             if abs(self.speed_y) < 15:
                 self.speed_y *= 1.001
+
 
 # ---------- Leaderboard Utilities ----------
 def load_leaderboard():
@@ -123,13 +147,15 @@ def add_score_to_leaderboard(name, points, mode):
     entries = entries[:MAX_LEADERBOARD_ITEMS]
     save_leaderboard(entries)
 
+
 # ---------- UI Helpers ----------
 def draw_window(paddle1, paddle2, ball, score1, score2, show_ready=False):
     WIN.fill((0, 0, 0))
     for star in stars:
-        pygame.draw.circle(WIN, STAR_COLOR, star, 1)
-    for y in range(0, HEIGHT, 20):
-        pygame.draw.rect(WIN, WHITE, (WIDTH // 2 - 1, y, 2, 10))
+        x, y = scale_pos(star[0], star[1])
+        pygame.draw.circle(WIN, STAR_COLOR, (x, y), 1)
+    for y in range(0, BASE_HEIGHT, 20):
+        pygame.draw.rect(WIN, WHITE, scale_rect(pygame.Rect(BASE_WIDTH // 2 - 1, y, 2, 10)))
     paddle1.draw()
     paddle2.draw()
     ball.draw()
@@ -147,7 +173,7 @@ def render_centered_text(text, font, y):
     WIN.blit(surf, (WIDTH // 2 - surf.get_width() // 2, y))
 
 
-# ---------- Text Input (for initials/name) ----------
+# ---------- Text Input ----------
 def text_input(prompt, max_chars=10):
     input_text = ""
     clock = pygame.time.Clock()
@@ -169,7 +195,8 @@ def text_input(prompt, max_chars=10):
                         input_text += event.unicode
         WIN.fill((0, 0, 0))
         for star in stars:
-            pygame.draw.circle(WIN, STAR_COLOR, star, 1)
+            x, y = scale_pos(star[0], star[1])
+            pygame.draw.circle(WIN, STAR_COLOR, (x, y), 1)
         render_centered_text(prompt, MENU_FONT, HEIGHT // 2 - 40)
         box = pygame.Rect(WIDTH // 2 - 150, HEIGHT // 2 - 5, 300, 40)
         pygame.draw.rect(WIN, WHITE, box, 2)
@@ -179,6 +206,7 @@ def text_input(prompt, max_chars=10):
         WIN.blit(hint, (WIDTH // 2 - hint.get_width() // 2, box.y + 50))
         pygame.display.update()
     return input_text.strip() or "---"
+
 
 # ---------- Leaderboard Screen ----------
 def show_leaderboard_screen():
@@ -211,12 +239,13 @@ def show_leaderboard_screen():
         WIN.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT - 50))
         pygame.display.update()
 
+
 # ---------- Pause Menu ----------
-def pause_menu():
+def pause_menu(custom_message="GAME PAUSED"):
     paused = True
     while paused:
         WIN.fill((0, 0, 0))
-        render_centered_text("GAME PAUSED", FONT, 100)
+        render_centered_text(custom_message, FONT, 100)
         render_centered_text("Press R to Resume", MENU_FONT, 180)
         render_centered_text("Press Q to Quit", MENU_FONT, 220)
         pygame.display.update()
@@ -232,11 +261,13 @@ def pause_menu():
                     pygame.quit()
                     sys.exit()
 
-# ---------- Main Game Loop with Leaderboard Check ----------
+
+# ---------- Main Game Loop ----------
 def main_game(difficulty="E", max_points=5, two_player=True):
+    global WIDTH, HEIGHT, WIN
     clock = pygame.time.Clock()
-    paddle1 = Paddle(20, HEIGHT // 2 - PADDLE_HEIGHT // 2)
-    paddle2 = Paddle(WIDTH - 30, HEIGHT // 2 - PADDLE_HEIGHT // 2)
+    paddle1 = Paddle(20, BASE_HEIGHT // 2 - PADDLE_HEIGHT // 2)
+    paddle2 = Paddle(BASE_WIDTH - 30, BASE_HEIGHT // 2 - PADDLE_HEIGHT // 2)
     ball = Ball(difficulty)
 
     score1, score2 = 0, 0
@@ -253,6 +284,10 @@ def main_game(difficulty="E", max_points=5, two_player=True):
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
+            if event.type == pygame.VIDEORESIZE:
+                WIDTH, HEIGHT = event.w, event.h
+                WIN = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
+                pause_menu("RESIZED - GAME PAUSED")
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_p:  # Press P to pause
                     pause_menu()
@@ -288,7 +323,7 @@ def main_game(difficulty="E", max_points=5, two_player=True):
                 ball.reset()
                 pause_after_score = True
                 pause_start_time = pygame.time.get_ticks()
-            if ball.rect.right >= WIDTH:
+            if ball.rect.right >= BASE_WIDTH:
                 score1 += 1
                 ball.reset()
                 pause_after_score = True
@@ -341,8 +376,10 @@ def main_game(difficulty="E", max_points=5, two_player=True):
 
     pygame.time.delay(600)
 
-# ---------- Main Menu (with Leaderboard Option) ----------
+
+# ---------- Main Menu ----------
 def main_menu():
+    global WIDTH, HEIGHT, WIN   # ✅ FIXED: declare global at top
     run = True
     difficulty = "E"
     max_points = 5
@@ -377,6 +414,9 @@ def main_menu():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
+            if event.type == pygame.VIDEORESIZE:
+                WIDTH, HEIGHT = event.w, event.h
+                WIN = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN:
                     main_game(difficulty, max_points, two_player)
@@ -396,6 +436,7 @@ def main_menu():
                         max_points -= 1
                 if event.key == pygame.K_l:
                     show_leaderboard_screen()
+
 
 # ---------- Entry Point ----------
 if __name__ == "__main__":
