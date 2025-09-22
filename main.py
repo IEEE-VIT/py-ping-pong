@@ -22,7 +22,7 @@ except:
 
 PADDLE_WIDTH, PADDLE_HEIGHT = 10, 60
 BALL_SIZE = 10
-DIFFICULTY_SPEED = {"E": 5, "C": 8, "A": 5}
+DIFFICULTY_SPEED = {"E": 5, "C": 8, "A": 10}
 
 stars = [(random.randint(0, WIDTH), random.randint(0, HEIGHT)) for _ in range(150)]
 
@@ -35,7 +35,10 @@ class Paddle:
         pygame.draw.rect(WIN, NEON_BLUE, self.rect)
 
     def move(self, up=True):
-        self.rect.y -= self.speed if up else -self.speed
+        if up:
+            self.rect.y -= self.speed
+        else:
+            self.rect.y += self.speed
         if self.rect.top < 0: self.rect.top = 0
         if self.rect.bottom > HEIGHT: self.rect.bottom = HEIGHT
 
@@ -43,12 +46,16 @@ class Ball:
     def __init__(self, difficulty="E"):
         self.rect = pygame.Rect(WIDTH//2, HEIGHT//2, BALL_SIZE, BALL_SIZE)
         self.difficulty = difficulty
-        self.reset()
+        self.reset(start_moving=False)
 
-    def reset(self):
+    def reset(self, start_moving=True):
         self.rect.center = (WIDTH//2, HEIGHT//2)
-        self.speed_x = random.choice([-1, 1]) * random.randint(4, 6)
-        self.speed_y = random.choice([-1, 1]) * random.randint(2, 4)
+        if start_moving:
+            self.speed_x = random.choice([-1, 1]) * random.randint(4, 6)
+            self.speed_y = random.choice([-1, 1]) * random.randint(2, 4)
+        else:
+            self.speed_x = 0
+            self.speed_y = 0
         self.base_speed = DIFFICULTY_SPEED[self.difficulty]
 
     def draw(self):
@@ -66,7 +73,7 @@ class Ball:
             if abs(self.speed_y) < 15:
                 self.speed_y *= 1.001
 
-def draw_window(paddle1, paddle2, ball, score1, score2):
+def draw_window(paddle1, paddle2, ball, score1, score2, message=None):
     WIN.fill((0, 0, 0))  # Black background
     # Draw stars
     for star in stars:
@@ -80,6 +87,10 @@ def draw_window(paddle1, paddle2, ball, score1, score2):
     # Draw scores
     score_text = FONT.render(f"{score1}  |  {score2}", True, WHITE)
     WIN.blit(score_text, (WIDTH//2 - score_text.get_width()//2, 10))
+    # Optional message (like "Get Ready!")
+    if message:
+        msg_text = FONT.render(message, True, GREEN)
+        WIN.blit(msg_text, (WIDTH//2 - msg_text.get_width()//2, HEIGHT//2 - msg_text.get_height()//2))
     pygame.display.update()
 
 def main_game(difficulty="E", max_points=5, two_player=True):
@@ -90,6 +101,8 @@ def main_game(difficulty="E", max_points=5, two_player=True):
 
     score1, score2 = 0, 0
     run = True
+    waiting = True  # Start with "Get Ready!"
+    wait_timer = pygame.time.get_ticks()
 
     while run:
         clock.tick(FPS)
@@ -117,6 +130,14 @@ def main_game(difficulty="E", max_points=5, two_player=True):
             elif paddle2.rect.centery > ball.rect.centery:
                 paddle2.move(up=True)
 
+        # Handle waiting period after scoring
+        if waiting:
+            draw_window(paddle1, paddle2, ball, score1, score2, "GET READY!")
+            if pygame.time.get_ticks() - wait_timer > 2000:  # 2 seconds delay
+                waiting = False
+                ball.reset(start_moving=True)
+            continue
+
         ball.move()
 
         # Ball collision with paddles
@@ -128,10 +149,14 @@ def main_game(difficulty="E", max_points=5, two_player=True):
         # Score update
         if ball.rect.left <= 0:
             score2 += 1
-            ball.reset()
+            ball.reset(start_moving=False)
+            waiting = True
+            wait_timer = pygame.time.get_ticks()
         if ball.rect.right >= WIDTH:
             score1 += 1
-            ball.reset()
+            ball.reset(start_moving=False)
+            waiting = True
+            wait_timer = pygame.time.get_ticks()
 
         draw_window(paddle1, paddle2, ball, score1, score2)
 
