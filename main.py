@@ -3,8 +3,9 @@ import sys
 import random
 
 pygame.init()
-WIDTH, HEIGHT = 800, 400
-WIN = pygame.display.set_mode((WIDTH, HEIGHT))
+BASE_WIDTH, BASE_HEIGHT = 800, 400
+WIDTH, HEIGHT = BASE_WIDTH, BASE_HEIGHT
+WIN = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
 pygame.display.set_caption("Pixel Ping Pong - Space Edition")
 FPS = 60
 
@@ -22,74 +23,76 @@ except:
 
 PADDLE_WIDTH, PADDLE_HEIGHT = 10, 60
 BALL_SIZE = 10
-DIFFICULTY_SPEED = {"E": 5, "C": 8, "A": 5}
+DIFFICULTY_SPEED = {"E": 4, "C": 6, "A": 6}
 
-stars = [(random.randint(0, WIDTH), random.randint(0, HEIGHT)) for _ in range(150)]
+stars = [(random.randint(0, BASE_WIDTH), random.randint(0, BASE_HEIGHT)) for _ in range(150)]
 
 class Paddle:
     def __init__(self, x, y):
         self.rect = pygame.Rect(x, y, PADDLE_WIDTH, PADDLE_HEIGHT)
         self.speed = 7
 
-    def draw(self):
-        pygame.draw.rect(WIN, NEON_BLUE, self.rect)
+    def draw(self, surface):
+        pygame.draw.rect(surface, NEON_BLUE, self.rect)
 
     def move(self, up=True):
-        self.rect.y -= self.speed if up else -self.speed
+        if up:
+            self.rect.y -= self.speed
+        else:
+            self.rect.y += self.speed
         if self.rect.top < 0: self.rect.top = 0
-        if self.rect.bottom > HEIGHT: self.rect.bottom = HEIGHT
+        if self.rect.bottom > BASE_HEIGHT: self.rect.bottom = BASE_HEIGHT
 
 class Ball:
     def __init__(self, difficulty="E"):
-        self.rect = pygame.Rect(WIDTH//2, HEIGHT//2, BALL_SIZE, BALL_SIZE)
+        self.rect = pygame.Rect(BASE_WIDTH//2, BASE_HEIGHT//2, BALL_SIZE, BALL_SIZE)
         self.difficulty = difficulty
         self.reset()
 
     def reset(self):
-        self.rect.center = (WIDTH//2, HEIGHT//2)
+        self.rect.center = (BASE_WIDTH//2, BASE_HEIGHT//2)
         self.speed_x = random.choice([-1, 1]) * random.randint(4, 6)
         self.speed_y = random.choice([-1, 1]) * random.randint(2, 4)
         self.base_speed = DIFFICULTY_SPEED[self.difficulty]
 
-    def draw(self):
-        pygame.draw.rect(WIN, GREEN, self.rect)
+    def draw(self, surface):
+        pygame.draw.rect(surface, GREEN, self.rect)
 
     def move(self):
         self.rect.x += self.speed_x
         self.rect.y += self.speed_y
-        if self.rect.top <= 0 or self.rect.bottom >= HEIGHT:
+        if self.rect.top <= 0 or self.rect.bottom >= BASE_HEIGHT:
             self.speed_y *= -1
-        # Accelerate for "A" difficulty
-        if self.difficulty == "A":
-            if abs(self.speed_x) < 15:  # Limit max speed
+        if self.difficulty == "A":  # Accelerating mode
+            if abs(self.speed_x) < 15:
                 self.speed_x *= 1.001
             if abs(self.speed_y) < 15:
                 self.speed_y *= 1.001
 
-def draw_window(paddle1, paddle2, ball, score1, score2):
-    WIN.fill((0, 0, 0))  # Black background
-    # Draw stars
+def draw_window(surface, paddle1, paddle2, ball, score1, score2):
+    surface.fill((0, 0, 0))  # Black background
     for star in stars:
-        pygame.draw.circle(WIN, STAR_COLOR, star, 1)
-    # Middle dashed line
-    for y in range(0, HEIGHT, 20):
-        pygame.draw.rect(WIN, WHITE, (WIDTH//2 - 1, y, 2, 10))
-    paddle1.draw()
-    paddle2.draw()
-    ball.draw()
-    # Draw scores
+        pygame.draw.circle(surface, STAR_COLOR, star, 1)
+    for y in range(0, BASE_HEIGHT, 20):
+        pygame.draw.rect(surface, WHITE, (BASE_WIDTH//2 - 1, y, 2, 10))
+    paddle1.draw(surface)
+    paddle2.draw(surface)
+    ball.draw(surface)
     score_text = FONT.render(f"{score1}  |  {score2}", True, WHITE)
-    WIN.blit(score_text, (WIDTH//2 - score_text.get_width()//2, 10))
-    pygame.display.update()
+    surface.blit(score_text, (BASE_WIDTH//2 - score_text.get_width()//2, 10))
 
 def main_game(difficulty="E", max_points=5, two_player=True):
+    global WIDTH, HEIGHT, WIN
     clock = pygame.time.Clock()
-    paddle1 = Paddle(20, HEIGHT//2 - PADDLE_HEIGHT//2)
-    paddle2 = Paddle(WIDTH - 30, HEIGHT//2 - PADDLE_HEIGHT//2)
+    base_surface = pygame.Surface((BASE_WIDTH, BASE_HEIGHT))
+
+    paddle1 = Paddle(20, BASE_HEIGHT//2 - PADDLE_HEIGHT//2)
+    paddle2 = Paddle(BASE_WIDTH - 30, BASE_HEIGHT//2 - PADDLE_HEIGHT//2)
     ball = Ball(difficulty)
 
     score1, score2 = 0, 0
     run = True
+    paused = False
 
     while run:
         clock.tick(FPS)
@@ -97,56 +100,62 @@ def main_game(difficulty="E", max_points=5, two_player=True):
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
+            if event.type == pygame.VIDEORESIZE:
+                WIDTH, HEIGHT = event.w, event.h
+                WIN = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
+                paused = True
+            if event.type == pygame.KEYDOWN and paused:
+                if event.key == pygame.K_RETURN:
+                    paused = False
 
-        keys = pygame.key.get_pressed()
-        # Player 1 movement
-        if keys[pygame.K_w]:
-            paddle1.move(up=True)
-        if keys[pygame.K_s]:
-            paddle1.move(up=False)
-        # Player 2 movement
-        if two_player:
-            if keys[pygame.K_UP]:
-                paddle2.move(up=True)
-            if keys[pygame.K_DOWN]:
-                paddle2.move(up=False)
+        if paused:
+            base_surface.fill((0, 0, 0))
+            pause_text = FONT.render("RESIZED - Press ENTER to Resume", True, GREEN)
+            base_surface.blit(pause_text, (BASE_WIDTH//2 - pause_text.get_width()//2,
+                                           BASE_HEIGHT//2 - pause_text.get_height()//2))
         else:
-            # Simple AI
-            if paddle2.rect.centery < ball.rect.centery:
-                paddle2.move(up=False)
-            elif paddle2.rect.centery > ball.rect.centery:
-                paddle2.move(up=True)
+            keys = pygame.key.get_pressed()
+            if keys[pygame.K_w]: paddle1.move(up=True)
+            if keys[pygame.K_s]: paddle1.move(up=False)
+            if two_player:
+                if keys[pygame.K_UP]: paddle2.move(up=True)
+                if keys[pygame.K_DOWN]: paddle2.move(up=False)
+            else:
+                if paddle2.rect.centery < ball.rect.centery: paddle2.move(up=False)
+                elif paddle2.rect.centery > ball.rect.centery: paddle2.move(up=True)
 
-        ball.move()
+            ball.move()
 
-        # Ball collision with paddles
-        if ball.rect.colliderect(paddle1.rect):
-            ball.speed_x *= -1
-        if ball.rect.colliderect(paddle2.rect):
-            ball.speed_x *= -1
+            if ball.rect.colliderect(paddle1.rect): ball.speed_x *= -1
+            if ball.rect.colliderect(paddle2.rect): ball.speed_x *= -1
 
-        # Score update
-        if ball.rect.left <= 0:
-            score2 += 1
-            ball.reset()
-        if ball.rect.right >= WIDTH:
-            score1 += 1
-            ball.reset()
+            if ball.rect.left <= 0:
+                score2 += 1
+                ball.reset()
+            if ball.rect.right >= BASE_WIDTH:
+                score1 += 1
+                ball.reset()
 
-        draw_window(paddle1, paddle2, ball, score1, score2)
+            draw_window(base_surface, paddle1, paddle2, ball, score1, score2)
 
-        # Win check
-        if score1 >= max_points:
-            winner_text = "PLAYER 1 WINS!"
-            run = False
-        elif score2 >= max_points:
-            winner_text = "PLAYER 2 WINS!" if two_player else "AI WINS!"
-            run = False
+            if score1 >= max_points:
+                winner_text = "PLAYER 1 WINS!"
+                run = False
+            elif score2 >= max_points:
+                winner_text = "PLAYER 2 WINS!" if two_player else "AI WINS!"
+                run = False
+
+        # Scale everything to window size
+        scaled_surface = pygame.transform.smoothscale(base_surface, (WIDTH, HEIGHT))
+        WIN.blit(scaled_surface, (0, 0))
+        pygame.display.update()
 
     # Display winner
-    WIN.fill((0, 0, 0))
+    base_surface.fill((0, 0, 0))
     text = FONT.render(winner_text, True, GREEN)
-    WIN.blit(text, (WIDTH//2 - text.get_width()//2, HEIGHT//2 - text.get_height()//2))
+    base_surface.blit(text, (BASE_WIDTH//2 - text.get_width()//2, BASE_HEIGHT//2 - text.get_height()//2))
+    scaled_surface = pygame.transform.smoothscale(base_surface, (WIDTH, HEIGHT))
+    WIN.blit(scaled_surface, (0, 0))
     pygame.display.update()
     pygame.time.delay(3000)
 
@@ -182,19 +191,12 @@ def main_menu():
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN:
                     main_game(difficulty, max_points, two_player)
-                if event.key == pygame.K_e:
-                    difficulty = "E"
-                if event.key == pygame.K_c:
-                    difficulty = "C"
-                if event.key == pygame.K_a:
-                    difficulty = "A"
-                if event.key == pygame.K_m:
-                    two_player = not two_player
-                if event.key == pygame.K_UP:
-                    if max_points < 20:
-                        max_points += 1
-                if event.key == pygame.K_DOWN:
-                    if max_points > 1:
-                        max_points -= 1
+                if event.key == pygame.K_e: difficulty = "E"
+                if event.key == pygame.K_c: difficulty = "C"
+                if event.key == pygame.K_a: difficulty = "A"
+                if event.key == pygame.K_m: two_player = not two_player
+                if event.key == pygame.K_UP and max_points < 20: max_points += 1
+                if event.key == pygame.K_DOWN and max_points > 1: max_points -= 1
 
 main_menu()
+
