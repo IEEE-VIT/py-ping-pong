@@ -29,7 +29,7 @@ except:
 
 PADDLE_WIDTH, PADDLE_HEIGHT = 10, 60
 BALL_SIZE = 10
-DIFFICULTY_SPEED = {"E": 5, "C": 8, "A": 5}
+DIFFICULTY_SPEED = {"E": 5, "C": 8, "A": 10}
 
 stars = [(random.randint(0, WIDTH), random.randint(0, HEIGHT)) for _ in range(150)]
 
@@ -47,7 +47,6 @@ class Paddle:
             self.rect.y -= self.speed
         else:
             self.rect.y += self.speed
-
         if self.rect.top < 0: self.rect.top = 0
         if self.rect.bottom > HEIGHT: self.rect.bottom = HEIGHT
 
@@ -55,41 +54,26 @@ class Ball:
     def __init__(self, difficulty="E"):
         self.rect = pygame.Rect(WIDTH//2, HEIGHT//2, BALL_SIZE, BALL_SIZE)
         self.difficulty = difficulty
-        self.reset()
-
-    def reset(self):
-        self.rect.center = (WIDTH//2, HEIGHT//2)
-        self.speed_x = 0
-        self.speed_y = 0
-        self.base_speed = DIFFICULTY_SPEED[self.difficulty]
-        self.ready_to_move = False
-        # used to store speeds when pausing
+        self.reset(start_moving=False)
         self._saved_speed_x = 0
         self._saved_speed_y = 0
 
+    def reset(self, start_moving=True):
+        self.rect.center = (WIDTH//2, HEIGHT//2)
+        self.base_speed = DIFFICULTY_SPEED[self.difficulty]
+        if start_moving:
+            self.start_movement()
+        else:
+            self.speed_x = 0
+            self.speed_y = 0
+            self.ready_to_move = False
+
     def start_movement(self):
-        self.speed_x = random.choice([-1, 1]) * random.randint(4, 6)
-        self.speed_y = random.choice([-1, 1]) * random.randint(2, 4)
+        self.speed_x = random.choice([-1,1]) * random.randint(4,6)
+        self.speed_y = random.choice([-1,1]) * random.randint(2,4)
         self.ready_to_move = True
 
-    def draw(self):
-        pygame.draw.rect(WIN, GREEN, self.rect)
-
-    def move(self):
-        if not self.ready_to_move:
-            return
-        self.rect.x += self.speed_x
-        self.rect.y += self.speed_y
-        if self.rect.top <= 0 or self.rect.bottom >= HEIGHT:
-            self.speed_y *= -1
-        if self.difficulty == "A":
-            if abs(self.speed_x) < 15:
-                self.speed_x *= 1.001
-            if abs(self.speed_y) < 15:
-                self.speed_y *= 1.001
-
     def pause(self):
-        # Save current movement and stop
         self._saved_speed_x = self.speed_x
         self._saved_speed_y = self.speed_y
         self.ready_to_move = False
@@ -97,17 +81,28 @@ class Ball:
         self.speed_y = 0
 
     def resume(self):
-        # Restore saved movement
         self.speed_x = self._saved_speed_x
         self.speed_y = self._saved_speed_y
-        # If saved speeds were zero (e.g., just after reset), start fresh
         if self.speed_x == 0 and self.speed_y == 0:
             self.start_movement()
         else:
             self.ready_to_move = True
 
-# ---------- Leaderboard Utilities ----------
+    def move(self):
+        if not getattr(self, "ready_to_move", True):
+            return
+        self.rect.x += self.speed_x
+        self.rect.y += self.speed_y
+        if self.rect.top <= 0 or self.rect.bottom >= HEIGHT:
+            self.speed_y *= -1
+        if self.difficulty == "A":
+            if abs(self.speed_x) < 15: self.speed_x *= 1.001
+            if abs(self.speed_y) < 15: self.speed_y *= 1.001
 
+    def draw(self):
+        pygame.draw.rect(WIN, GREEN, self.rect)
+
+# ---------- Leaderboard Utilities ----------
 def load_leaderboard():
     if not os.path.exists(LEADERBOARD_FILE):
         return []
@@ -120,14 +115,12 @@ def load_leaderboard():
         pass
     return []
 
-
 def save_leaderboard(entries):
     try:
         with open(LEADERBOARD_FILE, "w") as f:
             json.dump(entries, f, indent=2)
     except Exception as e:
         print("Error saving leaderboard:", e)
-
 
 def add_score_to_leaderboard(name, points, mode):
     entries = load_leaderboard()
@@ -138,13 +131,14 @@ def add_score_to_leaderboard(name, points, mode):
         "date": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
     }
     entries.append(entry)
-    # sort desc by points
     entries = sorted(entries, key=lambda x: x["points"], reverse=True)
-    # keep top N
     entries = entries[:MAX_LEADERBOARD_ITEMS]
     save_leaderboard(entries)
 
 # ---------- UI Helpers ----------
+def render_centered_text(text, font, y):
+    surf = font.render(text, True, WHITE)
+    WIN.blit(surf, (WIDTH//2 - surf.get_width()//2, y))
 
 def draw_window(paddle1, paddle2, ball, score1, score2, show_ready=False, paused=False):
     WIN.fill((0, 0, 0))
@@ -157,31 +151,25 @@ def draw_window(paddle1, paddle2, ball, score1, score2, show_ready=False, paused
     ball.draw()
     score_text = FONT.render(f"{score1}  |  {score2}", True, WHITE)
     WIN.blit(score_text, (WIDTH//2 - score_text.get_width()//2, 10))
+
     if show_ready:
         ready_text = FONT.render("GET READY!", True, GREEN)
         WIN.blit(ready_text, (WIDTH//2 - ready_text.get_width()//2, HEIGHT//2 - ready_text.get_height()//2))
     if paused:
-        # translucent overlay
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 150))
         WIN.blit(overlay, (0, 0))
         render_centered_text("PAUSED", FONT, HEIGHT//2 - 80)
         render_centered_text("Resume: P / R / ENTER", MENU_FONT, HEIGHT//2)
         render_centered_text("Quit: Q", MENU_FONT, HEIGHT//2 + 30)
+
     pygame.display.update()
 
-
-def render_centered_text(text, font, y):
-    surf = font.render(text, True, WHITE)
-    WIN.blit(surf, (WIDTH//2 - surf.get_width()//2, y))
-
-# ---------- Text Input (for initials/name) ----------
-
+# ---------- Text Input ----------
 def text_input(prompt, max_chars=10):
     input_text = ""
     clock = pygame.time.Clock()
     active = True
-
     while active:
         clock.tick(FPS)
         for event in pygame.event.get():
@@ -210,12 +198,10 @@ def text_input(prompt, max_chars=10):
     return input_text.strip() or "---"
 
 # ---------- Leaderboard Screen ----------
-
 def show_leaderboard_screen():
     entries = load_leaderboard()
     run = True
     clock = pygame.time.Clock()
-
     while run:
         clock.tick(FPS)
         for event in pygame.event.get():
@@ -223,9 +209,8 @@ def show_leaderboard_screen():
                 pygame.quit()
                 sys.exit()
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE or event.key == pygame.K_RETURN:
+                if event.key in (pygame.K_ESCAPE, pygame.K_RETURN):
                     run = False
-
         WIN.fill((0, 0, 0))
         render_centered_text("LEADERBOARD", FONT, 20)
         if entries:
@@ -241,8 +226,7 @@ def show_leaderboard_screen():
         WIN.blit(hint, (WIDTH//2 - hint.get_width()//2, HEIGHT - 50))
         pygame.display.update()
 
-# ---------- Main Game Loop with Leaderboard Check (with Pause) ----------
-
+# ---------- Main Game ----------
 def main_game(difficulty="E", max_points=5, two_player=True):
     clock = pygame.time.Clock()
     paddle1 = Paddle(20, HEIGHT//2 - PADDLE_HEIGHT//2)
@@ -251,11 +235,11 @@ def main_game(difficulty="E", max_points=5, two_player=True):
 
     score1, score2 = 0, 0
     run = True
-
+    waiting = True
+    wait_timer = pygame.time.get_ticks()
     pause_after_score = False
     pause_start_time = 0
     pause_duration = 2500
-
     paused = False
 
     ball.start_movement()
@@ -267,16 +251,14 @@ def main_game(difficulty="E", max_points=5, two_player=True):
                 pygame.quit()
                 sys.exit()
             if event.type == pygame.KEYDOWN:
-                # Toggle pause with P
                 if event.key == pygame.K_p:
                     paused = not paused
                     if paused:
                         ball.pause()
                     else:
                         ball.resume()
-                # While paused, allow quick resume/quit
                 if paused:
-                    if event.key == pygame.K_r or event.key == pygame.K_RETURN:
+                    if event.key in (pygame.K_r, pygame.K_RETURN):
                         paused = False
                         ball.resume()
                     if event.key == pygame.K_q:
@@ -285,30 +267,22 @@ def main_game(difficulty="E", max_points=5, two_player=True):
 
         keys = pygame.key.get_pressed()
         if not paused and not pause_after_score:
-            # Player 1 movement
-            if keys[pygame.K_w]:
-                paddle1.move(up=True)
-            if keys[pygame.K_s]:
-                paddle1.move(up=False)
-            # Player 2 movement
+            # Player movement
+            if keys[pygame.K_w]: paddle1.move(up=True)
+            if keys[pygame.K_s]: paddle1.move(up=False)
             if two_player:
-                if keys[pygame.K_UP]:
-                    paddle2.move(up=True)
-                if keys[pygame.K_DOWN]:
-                    paddle2.move(up=False)
-            else:
-                # Simple AI
-                if paddle2.rect.centery < ball.rect.centery:
-                    paddle2.move(up=False)
-                elif paddle2.rect.centery > ball.rect.centery:
-                    paddle2.move(up=True)
+                if keys[pygame.K_UP]: paddle2.move(up=True)
+                if keys[pygame.K_DOWN]: paddle2.move(up=False)
+            else:  # AI
+                if paddle2.rect.centery < ball.rect.centery: paddle2.move(up=False)
+                elif paddle2.rect.centery > ball.rect.centery: paddle2.move(up=True)
 
             ball.move()
 
-            # Ball collision with paddles
+            # Paddle collisions
             if ball.rect.colliderect(paddle1.rect):
                 ball.speed_x *= -1
-                ball.rect.left = paddle1.rect.right  # avoid sticking
+                ball.rect.left = paddle1.rect.right
             if ball.rect.colliderect(paddle2.rect):
                 ball.speed_x *= -1
                 ball.rect.right = paddle2.rect.left
@@ -325,9 +299,8 @@ def main_game(difficulty="E", max_points=5, two_player=True):
                 pause_after_score = True
                 pause_start_time = pygame.time.get_ticks()
         else:
-            # During pause between points, check if time elapsed to resume ball movement
-            current_time = pygame.time.get_ticks()
-            if not paused and pause_after_score and (current_time - pause_start_time >= pause_duration):
+            # Check if pause after score elapsed
+            if not paused and pause_after_score and pygame.time.get_ticks() - pause_start_time >= pause_duration:
                 pause_after_score = False
                 ball.start_movement()
 
@@ -343,50 +316,28 @@ def main_game(difficulty="E", max_points=5, two_player=True):
             winner = 2
             run = False
 
-    # Display winner
+    # Show winner
     WIN.fill((0, 0, 0))
     text = FONT.render(winner_text, True, GREEN)
     WIN.blit(text, (WIDTH//2 - text.get_width()//2, HEIGHT//2 - text.get_height()//2))
     pygame.display.update()
     pygame.time.delay(3000)
 
-    # Show winner and check leaderboard
-    WIN.fill((0, 0, 0))
-    text = FONT.render(winner_text, True, GREEN)
-    WIN.blit(text, (WIDTH//2 - text.get_width()//2, HEIGHT//2 - text.get_height()//2 - 30))
-    pygame.display.update()
-    pygame.time.delay(1200)
+    # Leaderboard entry
+    player_points = score1 if winner == 1 else score2
+    entries = load_leaderboard()
+    qualifies = len(entries) < MAX_LEADERBOARD_ITEMS or any(player_points > e['points'] for e in entries)
+    if qualifies:
+        name = text_input("NEW HIGH SCORE! Enter name:", max_chars=10)
+        mode = "2P" if two_player else "1P"
+        add_score_to_leaderboard(name, player_points, mode)
+        WIN.fill((0, 0, 0))
+        msg = MENU_FONT.render("Score saved to leaderboard!", True, GREEN)
+        WIN.blit(msg, (WIDTH//2 - msg.get_width()//2, HEIGHT//2 - msg.get_height()//2))
+        pygame.display.update()
+        pygame.time.delay(1000)
 
-    # Determine player score to consider for leaderboard
-    # If single player, player is always Player 1 (left). If two-player, only the winner will be asked to enter name.
-    if (not two_player and winner == 1) or (two_player and winner in (1, 2)):
-        player_points = score1 if winner == 1 else score2
-        # Load existing and check if qualifies
-        entries = load_leaderboard()
-        qualifies = False
-        if len(entries) < MAX_LEADERBOARD_ITEMS:
-            qualifies = True
-        else:
-            # if any existing lower than player's score
-            if any(player_points > e['points'] for e in entries):
-                qualifies = True
-
-        if qualifies:
-            prompt = "NEW HIGH SCORE! Enter name:"
-            name = text_input(prompt, max_chars=10)
-            mode = "2P" if two_player else "1P"
-            add_score_to_leaderboard(name, player_points, mode)
-            # show confirmation
-            WIN.fill((0, 0, 0))
-            msg = MENU_FONT.render("Score saved to leaderboard!", True, GREEN)
-            WIN.blit(msg, (WIDTH//2 - msg.get_width()//2, HEIGHT//2 - msg.get_height()//2))
-            pygame.display.update()
-            pygame.time.delay(1000)
-
-    pygame.time.delay(600)
-
-# ---------- Main Menu (with Leaderboard Option) ----------
-
+# ---------- Main Menu ----------
 def main_menu():
     run = True
     difficulty = "E"
@@ -425,26 +376,16 @@ def main_menu():
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN:
                     main_game(difficulty, max_points, two_player)
-                if event.key == pygame.K_e:
-                    difficulty = "E"
-                if event.key == pygame.K_c:
-                    difficulty = "C"
-                if event.key == pygame.K_a:
-                    difficulty = "A"
-                if event.key == pygame.K_m:
-                    two_player = not two_player
-                if event.key == pygame.K_UP:
-                    if max_points < 20:
-                        max_points += 1
-                if event.key == pygame.K_DOWN:
-                    if max_points > 1:
-                        max_points -= 1
-                if event.key == pygame.K_l:
-                    show_leaderboard_screen()
+                if event.key == pygame.K_e: difficulty = "E"
+                if event.key == pygame.K_c: difficulty = "C"
+                if event.key == pygame.K_a: difficulty = "A"
+                if event.key == pygame.K_m: two_player = not two_player
+                if event.key == pygame.K_UP and max_points < 20: max_points += 1
+                if event.key == pygame.K_DOWN and max_points > 1: max_points -= 1
+                if event.key == pygame.K_l: show_leaderboard_screen()
 
 # ---------- Entry Point ----------
 if __name__ == "__main__":
-    # Ensure leaderboard file exists
     if not os.path.exists(LEADERBOARD_FILE):
         save_leaderboard([])
     main_menu()
