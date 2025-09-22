@@ -36,8 +36,10 @@ class Paddle:
 
     def move(self, up=True):
         self.rect.y -= self.speed if up else -self.speed
-        if self.rect.top < 0: self.rect.top = 0
-        if self.rect.bottom > HEIGHT: self.rect.bottom = HEIGHT
+        if self.rect.top < 0: 
+            self.rect.top = 0
+        if self.rect.bottom > HEIGHT: 
+            self.rect.bottom = HEIGHT
 
 class Ball:
     def __init__(self, difficulty="E"):
@@ -82,6 +84,14 @@ def draw_window(paddle1, paddle2, ball, score1, score2):
     WIN.blit(score_text, (WIDTH//2 - score_text.get_width()//2, 10))
     pygame.display.update()
 
+def pause_screen(paddle1, paddle2, ball, score1, score2, message="GET READY!", delay=2000):
+    draw_window(paddle1, paddle2, ball, score1, score2)
+    text = FONT.render(message, True, GREEN)
+    WIN.blit(text, (WIDTH//2 - text.get_width()//2,
+                    HEIGHT//2 - text.get_height()//2))
+    pygame.display.update()
+    pygame.time.delay(delay)
+
 def main_game(difficulty="E", max_points=5, two_player=True):
     clock = pygame.time.Clock()
     paddle1 = Paddle(20, HEIGHT//2 - PADDLE_HEIGHT//2)
@@ -90,6 +100,9 @@ def main_game(difficulty="E", max_points=5, two_player=True):
 
     score1, score2 = 0, 0
     run = True
+
+    # Initial "Game Start" pause
+    pause_screen(paddle1, paddle2, ball, score1, score2, "GAME START!", 2000)
 
     while run:
         clock.tick(FPS)
@@ -129,9 +142,12 @@ def main_game(difficulty="E", max_points=5, two_player=True):
         if ball.rect.left <= 0:
             score2 += 1
             ball.reset()
+            pause_screen(paddle1, paddle2, ball, score1, score2)
+
         if ball.rect.right >= WIDTH:
             score1 += 1
             ball.reset()
+            pause_screen(paddle1, paddle2, ball, score1, score2)
 
         draw_window(paddle1, paddle2, ball, score1, score2)
 
@@ -198,3 +214,4 @@ def main_menu():
                         max_points -= 1
 
 main_menu()
+
