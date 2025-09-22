@@ -7,7 +7,8 @@ from datetime import datetime
 
 # ---------- Configuration ----------
 pygame.init()
-WIDTH, HEIGHT = 800, 400
+WIDTH=int(input("Enter window width (default 800): ") or 800)
+HEIGHT=int(input("Enter window height (default 400): ") or 400 )
 WIN = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Pixel Ping Pong - Space Edition (With Leaderboard + Pause)")
 FPS = 60
