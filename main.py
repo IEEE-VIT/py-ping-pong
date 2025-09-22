@@ -35,7 +35,10 @@ class Paddle:
         pygame.draw.rect(WIN, NEON_BLUE, self.rect)
 
     def move(self, up=True):
-        self.rect.y -= self.speed if up else -self.speed
+        if up:
+            self.rect.y-=self.speed
+        else:
+            self.rect.y+=self.speed
         if self.rect.top < 0: self.rect.top = 0
         if self.rect.bottom > HEIGHT: self.rect.bottom = HEIGHT
 
@@ -121,17 +124,26 @@ def main_game(difficulty="E", max_points=5, two_player=True):
 
         # Ball collision with paddles
         if ball.rect.colliderect(paddle1.rect):
-            ball.speed_x *= -1
+            ball.speed_x *= abs(ball.speed_x)*1.05
+            ball.rect.left=paddle1.rect.right+1
         if ball.rect.colliderect(paddle2.rect):
-            ball.speed_x *= -1
+            ball.speed_x *= -abs(ball.spreed_x)*1.05
+            ball.rect.right=paddle2.rect.left-1
 
-        # Score update
-        if ball.rect.left <= 0:
-            score2 += 1
-            ball.reset()
-        if ball.rect.right >= WIDTH:
-            score1 += 1
-            ball.reset()
+        # Score update (fixed: set serve direction & short pause)
+    if ball.rect.left <= 0:
+        score2 += 1
+        ball.reset()
+        # serve toward the player who conceded (so ball moves right after left-wall score)
+        ball.speed_x = abs(ball.speed_x)
+        pygame.time.delay(400)
+
+    if ball.rect.right >= WIDTH:
+        score1 += 1
+        ball.reset()
+        # serve toward the player who conceded (so ball moves left after right-wall score)
+        ball.speed_x = -abs(ball.speed_x)
+        pygame.time.delay(400)
 
         draw_window(paddle1, paddle2, ball, score1, score2)
 
@@ -198,3 +210,4 @@ def main_menu():
                         max_points -= 1
 
 main_menu()
+
