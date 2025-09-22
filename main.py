@@ -129,9 +129,24 @@ def main_game(difficulty="E", max_points=5, two_player=True):
         if ball.rect.left <= 0:
             score2 += 1
             ball.reset()
+            draw_window(paddle1, paddle2, ball, score1, score2)
+            
+            score_text = FONT.render(f"Get Ready!", True, WHITE)
+            WIN.blit(score_text, (WIDTH//2 - score_text.get_width()//2, 10))
+            pygame.display.update()
+
+            pygame.time.delay(3000)
+
         if ball.rect.right >= WIDTH:
             score1 += 1
             ball.reset()
+            draw_window(paddle1, paddle2, ball, score1, score2)
+
+            score_text = FONT.render(f"Get Ready!", True, WHITE)
+            WIN.blit(score_text, (WIDTH//2 - score_text.get_width()//2, 10))
+            pygame.display.update()
+
+            pygame.time.delay(3000)
 
         draw_window(paddle1, paddle2, ball, score1, score2)
 
