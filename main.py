@@ -91,6 +91,11 @@ def main_game(difficulty="E", max_points=5, two_player=True):
     score1, score2 = 0, 0
     run = True
 
+    # Pause system variables
+    pause = False
+    pause_start_time = 0
+    pause_duration = 2000  # 2 seconds pause
+
     while run:
         clock.tick(FPS)
         for event in pygame.event.get():
@@ -117,7 +122,9 @@ def main_game(difficulty="E", max_points=5, two_player=True):
             elif paddle2.rect.centery > ball.rect.centery:
                 paddle2.move(up=True)
 
-        ball.move()
+        # Only move the ball if not paused
+        if not pause:
+            ball.move()
 
         # Ball collision with paddles
         if ball.rect.colliderect(paddle1.rect):
@@ -129,11 +136,27 @@ def main_game(difficulty="E", max_points=5, two_player=True):
         if ball.rect.left <= 0:
             score2 += 1
             ball.reset()
+            pause = True
+            pause_start_time = pygame.time.get_ticks()
+
         if ball.rect.right >= WIDTH:
             score1 += 1
             ball.reset()
+            pause = True
+            pause_start_time = pygame.time.get_ticks()
 
         draw_window(paddle1, paddle2, ball, score1, score2)
+
+        # Display "GET READY!" if paused
+        if pause:
+            ready_text = FONT.render("GET READY!", True, GREEN)
+            WIN.blit(ready_text, (WIDTH//2 - ready_text.get_width()//2,
+                                  HEIGHT//2 - ready_text.get_height()//2))
+            pygame.display.update()
+
+            # Check if pause over
+            if pygame.time.get_ticks() - pause_start_time >= pause_duration:
+                pause = False
 
         # Win check
         if score1 >= max_points:
