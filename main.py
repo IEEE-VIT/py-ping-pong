@@ -30,7 +30,7 @@ except:
 
 PADDLE_WIDTH, PADDLE_HEIGHT = 10, 60
 BALL_SIZE = 10
-DIFFICULTY_SPEED = {"E": 5, "C": 8, "A": 5}
+DIFFICULTY_SPEED = {"E": 5, "C": 8, "A": 12, "R": 8}
 
 stars = [(random.randint(0, BASE_WIDTH), random.randint(0, BASE_HEIGHT)) for _ in range(150)]
 
@@ -81,6 +81,8 @@ class Ball:
     def __init__(self, difficulty="E"):
         self.rect = pygame.Rect(BASE_WIDTH // 2, BASE_HEIGHT // 2, BALL_SIZE, BALL_SIZE)
         self.difficulty = difficulty
+        if self.difficulty == "R":
+            self.difficulty = random.choice(["E", "C", "A"])
         self.reset()
 
     def reset(self):
@@ -390,7 +392,8 @@ def main_menu():
         title = FONT.render("PIXEL PING PONG", True, GREEN)
         WIN.blit(title, (WIDTH // 2 - title.get_width() // 2, 50))
 
-        diff_text = MENU_FONT.render(f"Difficulty: {difficulty} (E/C/A)", True, WHITE)
+        diff_label = "Random" if difficulty == "R" else difficulty
+        diff_text = MENU_FONT.render(f"Difficulty: {diff_label} (E/C/A/R)", True, WHITE)
         WIN.blit(diff_text, (WIDTH // 2 - diff_text.get_width() // 2, 150))
 
         points_text = MENU_FONT.render(f"Max Points: {max_points} (UP/DOWN)", True, WHITE)
@@ -426,6 +429,8 @@ def main_menu():
                     difficulty = "C"
                 if event.key == pygame.K_a:
                     difficulty = "A"
+                if event.key == pygame.K_r:
+                    difficulty = "R"
                 if event.key == pygame.K_m:
                     two_player = not two_player
                 if event.key == pygame.K_UP:
