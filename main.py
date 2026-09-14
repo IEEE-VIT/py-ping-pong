@@ -5,6 +5,7 @@ import json
 import os
 import math
 from array import array
+from collections import deque
 from datetime import datetime
 
 # ---------- Configuration ----------
@@ -149,10 +150,12 @@ class Ball:
     def __init__(self, difficulty="E"):
         self.rect = pygame.Rect(BASE_WIDTH // 2, BASE_HEIGHT // 2, BALL_SIZE, BALL_SIZE)
         self.difficulty = difficulty
+        self.trail = deque(maxlen=8)
         self.reset()
 
     def reset(self):
         self.rect.center = (BASE_WIDTH // 2, BASE_HEIGHT // 2)
+        self.trail.clear()
         self.speed_x = 0
         self.speed_y = 0
         self.base_speed = DIFFICULTY_SPEED[self.difficulty]
@@ -165,6 +168,19 @@ class Ball:
         self.ready_to_move = True
 
     def draw(self):
+        # Render oldest positions first so the newest part of the tail glows.
+        if self.trail:
+            trail_layer = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            scale_x, scale_y = get_scale_factors()
+            base_radius = max(2, int(BALL_SIZE * min(scale_x, scale_y) / 2))
+            trail_length = len(self.trail)
+            for index, position in enumerate(self.trail):
+                progress = (index + 1) / trail_length
+                radius = max(1, int(base_radius * progress))
+                alpha = int(25 + 150 * progress)
+                pygame.draw.circle(trail_layer, (*GREEN, alpha),
+                                   scale_pos(*position), radius)
+            WIN.blit(trail_layer, (0, 0))
         pygame.draw.rect(WIN, GREEN, scale_rect(self.rect))
 
     def move(self):
@@ -172,6 +188,7 @@ class Ball:
             return False
         self.rect.x += self.speed_x
         self.rect.y += self.speed_y
+        self.trail.append(self.rect.center)
         if self.rect.top <= 0 or self.rect.bottom >= BASE_HEIGHT:
             self.speed_y *= -1
             wall_bounce = True
