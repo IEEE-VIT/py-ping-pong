@@ -44,7 +44,6 @@ DIFFICULTY_SPEED = {"E": 5, "C": 8, "A": 5}
 
 stars = [(random.randint(0, BASE_WIDTH), random.randint(0, BASE_HEIGHT)) for _ in range(150)]
 
-
 # ---------- Synthesized Sound Effects ----------
 def make_sound(notes, volume=0.35):
     """Create a small square-wave sound without requiring external assets."""
@@ -66,7 +65,6 @@ def make_sound(notes, volume=0.35):
             samples.extend([value] * channels)
     return pygame.mixer.Sound(buffer=samples.tobytes())
 
-
 SOUNDS = {
     "paddle": make_sound([(740, 0.055)], 0.28),
     "wall": make_sound([(420, 0.045)], 0.20),
@@ -76,17 +74,14 @@ SOUNDS = {
     "menu": make_sound([(600, 0.035)], 0.18),
 }
 
-
 def play_sound(name):
     sound = SOUNDS.get(name)
     if sound is not None:
         sound.play()
 
-
 # ---------- Scaling Utilities ----------
 def get_scale_factors():
     return WIDTH / BASE_WIDTH, HEIGHT / BASE_HEIGHT
-
 
 def scale_rect(rect):
     """Return a scaled copy of a rect for rendering"""
@@ -98,11 +93,9 @@ def scale_rect(rect):
         int(rect.height * scale_y),
     )
 
-
 def scale_pos(x, y):
     scale_x, scale_y = get_scale_factors()
     return int(x * scale_x), int(y * scale_y)
-
 
 # ---------- Game Objects ----------
 class Paddle:
@@ -123,7 +116,6 @@ class Paddle:
             self.rect.top = 0
         if self.rect.bottom > BASE_HEIGHT:
             self.rect.bottom = BASE_HEIGHT
-
 
 class Ball:
     def __init__(self, difficulty="E"):
@@ -163,6 +155,79 @@ class Ball:
                 self.speed_y *= 1.001
         return wall_bounce
 
+# ---------- Asteroid Class ----------
+ORANGE = (255, 165, 0)
+
+class Asteroid:
+    def __init__(self, x=None, y=None, radius=20):
+        self.radius = radius
+        # Keep asteroids spawned in the central play area to avoid trap-spawning on paddles
+        self.x = x if x is not None else float(random.randint(200, BASE_WIDTH - 200))
+        self.y = y if y is not None else float(random.randint(50, BASE_HEIGHT - 50))
+        
+        # Random floating velocity
+        angle = random.uniform(0, 2 * math.pi)
+        speed = random.uniform(1.0, 2.5)
+        self.vx = math.cos(angle) * speed
+        self.vy = math.sin(angle) * speed
+
+    def update(self):
+        self.x += self.vx
+        self.y += self.vy
+
+        # Bounce off top and bottom boundaries
+        if self.y - self.radius <= 0:
+            self.y = self.radius
+            self.vy *= -1
+        elif self.y + self.radius >= BASE_HEIGHT:
+            self.y = BASE_HEIGHT - self.radius
+            self.vy *= -1
+
+        # Bounce off middle field left/right bounds (keeping them in play field)
+        if self.x - self.radius <= 120:
+            self.x = 120 + self.radius
+            self.vx *= -1
+        elif self.x + self.radius >= BASE_WIDTH - 120:
+            self.x = BASE_WIDTH - 120 - self.radius
+            self.vx *= -1
+
+    def draw(self):
+        sx, sy = scale_pos(self.x, self.y)
+        scale_x, _ = get_scale_factors()
+        s_radius = int(self.radius * scale_x)
+
+        # Neon double-ring glow outline
+        pygame.draw.circle(WIN, ORANGE, (sx, sy), s_radius, 2)
+        pygame.draw.circle(WIN, (255, 200, 100), (sx, sy), max(1, s_radius - 3), 1)
+
+    def check_collision(self, ball):
+        """Checks radial collision with ball and bounces the ball realistically."""
+        ball_center_x = ball.rect.centerx
+        ball_center_y = ball.rect.centery
+        dx = ball_center_x - self.x
+        dy = ball_center_y - self.y
+        distance = math.hypot(dx, dy)
+
+        min_dist = self.radius + (BALL_SIZE / 2)
+        if distance < min_dist and distance > 0:
+            # Normal vector at collision point
+            nx = dx / distance
+            ny = dy / distance
+
+            # Dot product of ball velocity and normal
+            dot = ball.speed_x * nx + ball.speed_y * ny
+
+            # Reflect velocity vector: V_new = V - 2*(V . N)*N
+            ball.speed_x -= 2 * dot * nx
+            ball.speed_y -= 2 * dot * ny
+
+            # Push ball slightly outside asteroid to prevent sticking
+            overlap = min_dist - distance
+            ball.rect.x += int(nx * overlap)
+            ball.rect.y += int(ny * overlap)
+
+            return True
+        return False
 
 # ---------- Leaderboard Utilities ----------
 def load_leaderboard():
@@ -177,14 +242,12 @@ def load_leaderboard():
         pass
     return []
 
-
 def save_leaderboard(entries):
     try:
         with open(LEADERBOARD_FILE, "w") as f:
             json.dump(entries, f, indent=2)
     except Exception as e:
         print("Error saving leaderboard:", e)
-
 
 def add_score_to_leaderboard(name, points, mode):
     entries = load_leaderboard()
@@ -199,15 +262,19 @@ def add_score_to_leaderboard(name, points, mode):
     entries = entries[:MAX_LEADERBOARD_ITEMS]
     save_leaderboard(entries)
 
-
 # ---------- UI Helpers ----------
-def draw_window(paddle1, paddle2, ball, score1, score2, show_ready=False):
+def draw_window(paddle1, paddle2, ball, asteroids, score1, score2, show_ready=False):
     WIN.fill((0, 0, 0))
     for star in stars:
         x, y = scale_pos(star[0], star[1])
         pygame.draw.circle(WIN, STAR_COLOR, (x, y), 1)
     for y in range(0, BASE_HEIGHT, 20):
         pygame.draw.rect(WIN, WHITE, scale_rect(pygame.Rect(BASE_WIDTH // 2 - 1, y, 2, 10)))
+    
+    # Draw floating asteroids
+    for asteroid in asteroids:
+        asteroid.draw()
+
     paddle1.draw()
     paddle2.draw()
     ball.draw()
@@ -219,11 +286,9 @@ def draw_window(paddle1, paddle2, ball, score1, score2, show_ready=False):
                               HEIGHT // 2 - ready_text.get_height() // 2))
     pygame.display.update()
 
-
 def render_centered_text(text, font, y):
     surf = font.render(text, True, WHITE)
     WIN.blit(surf, (WIDTH // 2 - surf.get_width() // 2, y))
-
 
 # ---------- Text Input ----------
 def text_input(prompt, max_chars=10):
@@ -260,7 +325,6 @@ def text_input(prompt, max_chars=10):
         pygame.display.update()
     return input_text.strip() or "---"
 
-
 # ---------- Leaderboard Screen ----------
 def show_leaderboard_screen():
     entries = load_leaderboard()
@@ -293,7 +357,6 @@ def show_leaderboard_screen():
         WIN.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT - 50))
         pygame.display.update()
 
-
 # ---------- Pause Menu ----------
 def pause_menu(custom_message="GAME PAUSED"):
     paused = True
@@ -316,7 +379,6 @@ def pause_menu(custom_message="GAME PAUSED"):
                     pygame.quit()
                     sys.exit()
 
-
 # ---------- Main Game Loop ----------
 def main_game(difficulty="E", max_points=5, two_player=True):
     global WIDTH, HEIGHT, WIN
@@ -324,6 +386,7 @@ def main_game(difficulty="E", max_points=5, two_player=True):
     paddle1 = Paddle(20, BASE_HEIGHT // 2 - PADDLE_HEIGHT // 2)
     paddle2 = Paddle(BASE_WIDTH - 30, BASE_HEIGHT // 2 - PADDLE_HEIGHT // 2)
     ball = Ball(difficulty)
+    asteroids = [Asteroid() for _ in range(3)]
 
     score1, score2 = 0, 0
     run = True
@@ -367,6 +430,11 @@ def main_game(difficulty="E", max_points=5, two_player=True):
             if ball.move():
                 play_sound("wall")
 
+            for asteroid in asteroids:
+                asteroid.update()
+                if asteroid.check_collision(ball):
+                    play_sound("wall")
+
             if ball.rect.colliderect(paddle1.rect):
                 ball.speed_x *= -1
                 ball.rect.left = paddle1.rect.right
@@ -394,7 +462,7 @@ def main_game(difficulty="E", max_points=5, two_player=True):
                 pause_after_score = False
                 ball.start_movement()
 
-        draw_window(paddle1, paddle2, ball, score1, score2, show_ready=pause_after_score)
+        draw_window(paddle1, paddle2, ball, asteroids, score1, score2, show_ready=pause_after_score)
 
         if score1 >= max_points:
             winner_text = "PLAYER 1 WINS!"
@@ -437,7 +505,6 @@ def main_game(difficulty="E", max_points=5, two_player=True):
             pygame.time.delay(1000)
 
     pygame.time.delay(600)
-
 
 # ---------- Main Menu ----------
 def main_menu():
@@ -513,9 +580,12 @@ def main_menu():
                     play_sound("menu")
                     show_leaderboard_screen()
 
-
 # ---------- Entry Point ----------
 if __name__ == "__main__":
     if not os.path.exists(LEADERBOARD_FILE):
         save_leaderboard([])
     main_menu()
+
+ 
+
+
