@@ -42,6 +42,18 @@ PADDLE_WIDTH, PADDLE_HEIGHT = 10, 60
 BALL_SIZE = 10
 DIFFICULTY_SPEED = {"E": 5, "C": 8, "A": 5}
 
+POWER_UP_TYPES = {
+    "speed": {"label": "SPEED", "color": (255, 230, 0)},
+    "grow": {"label": "GROW", "color": (0, 255, 130)},
+    "shrink": {"label": "SHRINK", "color": (255, 90, 180)},
+    "ball_slow": {"label": "SLOW", "color": (110, 180, 255)},
+    "ball_fast": {"label": "FAST", "color": (255, 105, 50)},
+    "shield": {"label": "SHIELD", "color": (150, 100, 255)},
+}
+POWER_UP_SIZE = 22
+POWER_UP_LIFETIME = 7000
+POWER_UP_EFFECT_TIME = 7000
+
 stars = [(random.randint(0, BASE_WIDTH), random.randint(0, BASE_HEIGHT)) for _ in range(150)]
 
 
@@ -74,6 +86,7 @@ SOUNDS = {
     "win": make_sound([(523, 0.09), (659, 0.09), (784, 0.18)], 0.36),
     "high_score": make_sound([(659, 0.08), (784, 0.08), (988, 0.08), (1319, 0.22)], 0.40),
     "menu": make_sound([(600, 0.035)], 0.18),
+    "powerup": make_sound([(440, 0.05), (660, 0.08)], 0.28),
 }
 
 
@@ -108,7 +121,14 @@ def scale_pos(x, y):
 class Paddle:
     def __init__(self, x, y):
         self.rect = pygame.Rect(x, y, PADDLE_WIDTH, PADDLE_HEIGHT)
-        self.speed = 7
+        self.base_speed = 7
+        self.speed = self.base_speed
+
+    def set_height(self, height):
+        center_y = self.rect.centery
+        self.rect.height = height
+        self.rect.centery = center_y
+        self.rect.clamp_ip(pygame.Rect(0, 0, BASE_WIDTH, BASE_HEIGHT))
 
     def draw(self):
         pygame.draw.rect(WIN, NEON_BLUE, scale_rect(self.rect))
@@ -137,6 +157,7 @@ class Ball:
         self.speed_y = 0
         self.base_speed = DIFFICULTY_SPEED[self.difficulty]
         self.ready_to_move = False
+        self.last_touch = 1
 
     def start_movement(self):
         self.speed_x = random.choice([-1, 1]) * random.randint(4, 6)
@@ -162,6 +183,18 @@ class Ball:
             if abs(self.speed_y) < 15:
                 self.speed_y *= 1.001
         return wall_bounce
+
+
+class PowerUp:
+    def __init__(self, kind, created_at):
+        self.kind = kind
+        self.rect = pygame.Rect(
+            random.randint(BASE_WIDTH // 4, BASE_WIDTH * 3 // 4),
+            random.randint(40, BASE_HEIGHT - 40),
+            POWER_UP_SIZE,
+            POWER_UP_SIZE,
+        )
+        self.created_at = created_at
 
 
 # ---------- LeaderboarD Utilities ----------
@@ -202,7 +235,35 @@ def add_score_to_leaderboard(name, points, mode):
 
 
 # ---------- UI Helpers ----------
-def draw_window(paddle1, paddle2, ball, score1, score2, show_ready=False):
+def draw_power_up(power_up):
+    """Draw the active power-up as a labelled, glowing diamond."""
+    if power_up is None:
+        return
+    color = POWER_UP_TYPES[power_up.kind]["color"]
+    rect = scale_rect(power_up.rect)
+    center = rect.center
+    points = [(center[0], rect.top), (rect.right, center[1]),
+              (center[0], rect.bottom), (rect.left, center[1])]
+    pygame.draw.polygon(WIN, color, points)
+    pygame.draw.polygon(WIN, WHITE, points, 1)
+    label = MENU_FONT.render(POWER_UP_TYPES[power_up.kind]["label"], True, color)
+    WIN.blit(label, (WIDTH // 2 - label.get_width() // 2, HEIGHT - 28))
+
+
+def draw_effect_indicators(effects, current_time):
+    """Show shields and the remaining effect time for each player."""
+    for player, x in ((1, 20), (2, WIDTH - 145)):
+        active = [name.upper() for name, end in effects[player].items()
+                  if end > current_time and name != "size"]
+        if effects[player]["size"] > current_time:
+            active.append("SIZE")
+        if active:
+            indicator = MENU_FONT.render(" ".join(active), True, POWER_UP_TYPES["shield"]["color"])
+            WIN.blit(indicator, (x, 45))
+
+
+def draw_window(paddle1, paddle2, ball, score1, score2, power_up=None,
+                effects=None, current_time=0, show_ready=False):
     WIN.fill((0, 0, 0))
     for star in stars:
         x, y = scale_pos(star[0], star[1])
@@ -212,18 +273,57 @@ def draw_window(paddle1, paddle2, ball, score1, score2, show_ready=False):
     paddle1.draw()
     paddle2.draw()
     ball.draw()
+    draw_power_up(power_up)
     score_text = FONT.render(f"{score1}  |  {score2}", True, WHITE)
     WIN.blit(score_text, (WIDTH // 2 - score_text.get_width() // 2, 10))
     if show_ready:
         ready_text = FONT.render("GET READY!", True, GREEN)
         WIN.blit(ready_text, (WIDTH // 2 - ready_text.get_width() // 2,
                               HEIGHT // 2 - ready_text.get_height() // 2))
+    if effects is not None:
+        draw_effect_indicators(effects, current_time)
     pygame.display.update()
 
 
 def render_centered_text(text, font, y):
     surf = font.render(text, True, WHITE)
     WIN.blit(surf, (WIDTH // 2 - surf.get_width() // 2, y))
+
+
+# ---------- Power-up Effects ----------
+def update_power_up_effects(paddle1, paddle2, effects, current_time):
+    for player, paddle in ((1, paddle1), (2, paddle2)):
+        player_effects = effects[player]
+        paddle.speed = 11 if player_effects["speed"] > current_time else paddle.base_speed
+        size = player_effects["size"]
+        if size > current_time:
+            paddle.set_height(player_effects["size_value"])
+        elif paddle.rect.height != PADDLE_HEIGHT:
+            paddle.set_height(PADDLE_HEIGHT)
+
+
+def apply_power_up(power_up, player, ball, effects, current_time, ball_effect):
+    """Apply a collected power-up and return the updated global ball effect."""
+    kind = power_up.kind
+    player_effects = effects[player]
+    if kind == "speed":
+        player_effects["speed"] = current_time + POWER_UP_EFFECT_TIME
+    elif kind in ("grow", "shrink"):
+        player_effects["size"] = current_time + POWER_UP_EFFECT_TIME
+        player_effects["size_value"] = 95 if kind == "grow" else 35
+    elif kind == "shield":
+        player_effects["shield"] = current_time + POWER_UP_EFFECT_TIME
+    else:
+        # Undo an existing ball modifier before replacing it, avoiding compounding.
+        if ball_effect["until"] > current_time:
+            ball.speed_x /= ball_effect["factor"]
+            ball.speed_y /= ball_effect["factor"]
+        factor = 0.70 if kind == "ball_slow" else 1.35
+        ball.speed_x *= factor
+        ball.speed_y *= factor
+        ball_effect = {"factor": factor, "until": current_time + POWER_UP_EFFECT_TIME}
+    play_sound("powerup")
+    return ball_effect
 
 
 # ---------- Text Input ----------
@@ -331,11 +431,19 @@ def main_game(difficulty="E", max_points=5, two_player=True):
     pause_after_score = False
     pause_start_time = 0
     pause_duration = 2500
+    power_up = None
+    next_power_up = pygame.time.get_ticks() + random.randint(4000, 7000)
+    effects = {
+        1: {"speed": 0, "size": 0, "size_value": PADDLE_HEIGHT, "shield": 0},
+        2: {"speed": 0, "size": 0, "size_value": PADDLE_HEIGHT, "shield": 0},
+    }
+    ball_effect = {"factor": 1, "until": 0}
 
     ball.start_movement()
 
     while run:
         clock.tick(FPS)
+        current_time = pygame.time.get_ticks()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -349,6 +457,19 @@ def main_game(difficulty="E", max_points=5, two_player=True):
                     pause_menu()
 
         keys = pygame.key.get_pressed()
+        update_power_up_effects(paddle1, paddle2, effects, current_time)
+
+        if ball_effect["until"] and ball_effect["until"] <= current_time:
+            ball.speed_x /= ball_effect["factor"]
+            ball.speed_y /= ball_effect["factor"]
+            ball_effect = {"factor": 1, "until": 0}
+
+        if power_up is None and current_time >= next_power_up:
+            power_up = PowerUp(random.choice(list(POWER_UP_TYPES)), current_time)
+        elif power_up is not None and current_time - power_up.created_at >= POWER_UP_LIFETIME:
+            power_up = None
+            next_power_up = current_time + random.randint(4000, 7000)
+
         if not pause_after_score:
             if keys[pygame.K_w]:
                 paddle1.move(up=True)
@@ -371,31 +492,56 @@ def main_game(difficulty="E", max_points=5, two_player=True):
             if ball.rect.colliderect(paddle1.rect):
                 ball.speed_x *= -1
                 ball.rect.left = paddle1.rect.right
+                ball.last_touch = 1
                 play_sound("paddle")
             if ball.rect.colliderect(paddle2.rect):
                 ball.speed_x *= -1
                 ball.rect.right = paddle2.rect.left
+                ball.last_touch = 2
                 play_sound("paddle")
 
+            if power_up is not None:
+                collector = None
+                if paddle1.rect.colliderect(power_up.rect):
+                    collector = 1
+                elif paddle2.rect.colliderect(power_up.rect):
+                    collector = 2
+                elif ball.rect.colliderect(power_up.rect):
+                    collector = ball.last_touch
+                if collector is not None:
+                    ball_effect = apply_power_up(power_up, collector, ball, effects,
+                                                  current_time, ball_effect)
+                    power_up = None
+                    next_power_up = current_time + random.randint(4000, 7000)
+
             if ball.rect.left <= 0:
-                score2 += 1
+                if effects[1]["shield"] > current_time:
+                    play_sound("wall")
+                else:
+                    score2 += 1
+                    play_sound("score")
                 ball.reset()
-                play_sound("score")
                 pause_after_score = True
                 pause_start_time = pygame.time.get_ticks()
             if ball.rect.right >= BASE_WIDTH:
-                score1 += 1
+                if effects[2]["shield"] > current_time:
+                    play_sound("wall")
+                else:
+                    score1 += 1
+                    play_sound("score")
                 ball.reset()
-                play_sound("score")
                 pause_after_score = True
                 pause_start_time = pygame.time.get_ticks()
         else:
-            current_time = pygame.time.get_ticks()
             if current_time - pause_start_time >= pause_duration:
                 pause_after_score = False
                 ball.start_movement()
+                if ball_effect["until"] > current_time:
+                    ball.speed_x *= ball_effect["factor"]
+                    ball.speed_y *= ball_effect["factor"]
 
-        draw_window(paddle1, paddle2, ball, score1, score2, show_ready=pause_after_score)
+        draw_window(paddle1, paddle2, ball, score1, score2, power_up, effects,
+                    current_time, show_ready=pause_after_score)
 
         if score1 >= max_points:
             winner_text = "PLAYER 1 WINS!"
