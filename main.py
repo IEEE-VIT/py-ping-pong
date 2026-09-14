@@ -22,7 +22,11 @@ WIDTH, HEIGHT = BASE_WIDTH, BASE_HEIGHT
 WIN = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
 pygame.display.set_caption("Pixel Ping Pong - Space Edition (With Leaderboard)")
 FPS = 60
-
+# ---------- Controls ----------
+P1_UP = pygame.K_w
+P1_DOWN = pygame.K_s
+P2_UP = pygame.K_UP
+P2_DOWN = pygame.K_DOWN
 WHITE = (255, 255, 255)
 GREEN = (0, 255, 0)
 STAR_COLOR = (200, 200, 255)
@@ -364,14 +368,15 @@ def main_game(difficulty="E", max_points=5, two_player=True):
 
         keys = pygame.key.get_pressed()
         if not pause_after_score:
-            if keys[pygame.K_w]:
+            # --- UPDATED CONTROL VARIABLES ---
+            if keys[P1_UP]:
                 paddle1.move(up=True)
-            if keys[pygame.K_s]:
+            if keys[P1_DOWN]:
                 paddle1.move(up=False)
             if two_player:
-                if keys[pygame.K_UP]:
+                if keys[P2_UP]:
                     paddle2.move(up=True)
-                if keys[pygame.K_DOWN]:
+                if keys[P2_DOWN]:
                     paddle2.move(up=False)
             else:
                 if paddle2.rect.centery < ball.rect.centery:
@@ -453,7 +458,48 @@ def main_game(difficulty="E", max_points=5, two_player=True):
 
     pygame.time.delay(600)
 
-
+# ---------- Control Customization Screen ----------
+def customize_controls():
+    global P1_UP, P1_DOWN, P2_UP, P2_DOWN
+    
+    prompts = [
+        ("Player 1 UP", P1_UP),
+        ("Player 1 DOWN", P1_DOWN),
+        ("Player 2 UP", P2_UP),
+        ("Player 2 DOWN", P2_DOWN)
+    ]
+    new_keys = []
+    
+    for prompt_text, current_key in prompts:
+        waiting = True
+        while waiting:
+            WIN.fill((0, 0, 0))
+            for star in stars:
+                x, y = scale_pos(star[0], star[1])
+                pygame.draw.circle(WIN, STAR_COLOR, (x, y), 1)
+                
+            render_centered_text("CUSTOMIZE CONTROLS", FONT, 50)
+            render_centered_text(f"Press new key for: {prompt_text}", MENU_FONT, HEIGHT // 2 - 20)
+            
+            current_key_name = pygame.key.name(current_key).upper()
+            render_centered_text(f"(Current: {current_key_name})", MENU_FONT, HEIGHT // 2 + 20)
+            pygame.display.update()
+            
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                if event.type == pygame.KEYDOWN:
+                    new_keys.append(event.key)
+                    play_sound("menu")
+                    waiting = False
+                    
+    P1_UP, P1_DOWN, P2_UP, P2_DOWN = new_keys
+    
+    WIN.fill((0, 0, 0))
+    render_centered_text("Controls Saved!", FONT, HEIGHT // 2)
+    pygame.display.update()
+    pygame.time.delay(1000)
 # ---------- Main Menu ----------
 def main_menu():
     global WIDTH, HEIGHT, WIN   # ✅ FIXED: declare global at top
@@ -485,6 +531,8 @@ def main_menu():
         pause_text = MENU_FONT.render("Press P to Pause in-game", True, GREEN)
         WIN.blit(pause_text, (WIDTH // 2 - pause_text.get_width() // 2, 360))
 
+        controls_text = MENU_FONT.render("Press C to Customize Controls", True, WHITE)
+        WIN.blit(controls_text, (WIDTH // 2 - controls_text.get_width() // 2, 390))
         pygame.display.update()
 
         for event in pygame.event.get():
@@ -527,6 +575,9 @@ def main_menu():
                 if event.key == pygame.K_l:
                     play_sound("menu")
                     show_leaderboard_screen()
+                if event.key == pygame.K_k:
+                    play_sound("menu")
+                    customize_controls()
 
 
 # ---------- Entry Point ----------
