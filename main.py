@@ -147,7 +147,7 @@ def save_leaderboard(entries):
 
 
 def add_score_to_leaderboard(name, points, mode):
-    entries = load_leaderboard()
+    entries = load_leaderboard() #comment
     entry = {
         "name": name,
         "points": points,
