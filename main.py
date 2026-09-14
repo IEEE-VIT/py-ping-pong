@@ -164,7 +164,7 @@ class Ball:
         return wall_bounce
 
 
-# ---------- Leaderboard Utilities ----------
+# ---------- LeaderboarD Utilities ----------
 def load_leaderboard():
     if not os.path.exists(LEADERBOARD_FILE):
         return []
