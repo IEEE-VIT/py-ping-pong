@@ -89,6 +89,8 @@ class Ball:
         self.speed_y = 0
         self.base_speed = DIFFICULTY_SPEED[self.difficulty]
         self.ready_to_move = False
+        self.trail = []
+        self.trail_length = 10
 
     def start_movement(self):
         self.speed_x = random.choice([-1, 1]) * random.randint(4, 6)
@@ -96,11 +98,21 @@ class Ball:
         self.ready_to_move = True
 
     def draw(self):
+        for i, old_rect in enumerate(self.trail):
+            alpha = int(255 * (i / self.trail_length))
+            scaled_old = scale_rect(old_rect)
+            trail_surf = pygame.Surface((scaled_old.width, scaled_old.height))
+            trail_surf.set_alpha(alpha)
+            trail_surf.fill(GREEN)
+            WIN.blit(trail_surf, (scaled_old.x, scaled_old.y))
         pygame.draw.rect(WIN, GREEN, scale_rect(self.rect))
 
     def move(self):
         if not self.ready_to_move:
             return
+        self.trail.append(self.rect.copy())
+        if len(self.trail) > self.trail_length:
+            self.trail.pop(0)
         self.rect.x += self.speed_x
         self.rect.y += self.speed_y
         if self.rect.top <= 0 or self.rect.bottom >= BASE_HEIGHT:
