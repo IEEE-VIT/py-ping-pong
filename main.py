@@ -5,7 +5,7 @@ import json
 import os
 import math
 from array import array
-from datetime import datetime
+from datetime import datetime,timezone
 
 # ---------- Configuration ----------
 pygame.mixer.pre_init(44100, -16, 1, 512)
@@ -34,7 +34,7 @@ MAX_LEADERBOARD_ITEMS = 10
 try:
     FONT = pygame.font.Font("PressStart2P.ttf", 30)
     MENU_FONT = pygame.font.Font("PressStart2P.ttf", 20)
-except:
+except pygame.error:
     FONT = pygame.font.SysFont("Courier", 30)
     MENU_FONT = pygame.font.SysFont("Courier", 20)
 
@@ -139,7 +139,7 @@ class Ball:
         self.ready_to_move = False
 
     def start_movement(self):
-        self.speed_x = random.choice([-1, 1]) * random.randint(4, 6)
+        self.speed_x = random.choice([-1, 1]) * self.base_speed
         self.speed_y = random.choice([-1, 1]) * random.randint(2, 4)
         self.ready_to_move = True
 
@@ -192,7 +192,7 @@ def add_score_to_leaderboard(name, points, mode):
         "name": name,
         "points": points,
         "mode": mode,
-        "date": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     }
     entries.append(entry)
     entries = sorted(entries, key=lambda x: x["points"], reverse=True)
@@ -367,11 +367,11 @@ def main_game(difficulty="E", max_points=5, two_player=True):
             if ball.move():
                 play_sound("wall")
 
-            if ball.rect.colliderect(paddle1.rect):
+            if ball.rect.colliderect(paddle1.rect) and ball.speed_x < 0:
                 ball.speed_x *= -1
                 ball.rect.left = paddle1.rect.right
                 play_sound("paddle")
-            if ball.rect.colliderect(paddle2.rect):
+            if ball.rect.colliderect(paddle2.rect) and ball.speed_x > 0:
                 ball.speed_x *= -1
                 ball.rect.right = paddle2.rect.left
                 play_sound("paddle")
