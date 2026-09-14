@@ -7,6 +7,22 @@ from datetime import datetime
 
 # ---------- Configuration ----------
 pygame.init()
+pygame.mixer.init()
+
+# Sound Loading with Safe Fallback
+class DummySound:
+    def play(self): pass
+
+def load_sound(filename):
+    try:
+        return pygame.mixer.Sound(filename)
+    except:
+        return DummySound()
+
+SND_PADDLE = load_sound("paddle.wav")
+SND_WALL = load_sound("wall.wav")
+SND_SCORE = load_sound("score.wav")
+SND_WIN = load_sound("win.wav")
 BASE_WIDTH, BASE_HEIGHT = 800, 400  # Base resolution
 WIDTH, HEIGHT = BASE_WIDTH, BASE_HEIGHT
 WIN = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
@@ -105,6 +121,7 @@ class Ball:
         self.rect.y += self.speed_y
         if self.rect.top <= 0 or self.rect.bottom >= BASE_HEIGHT:
             self.speed_y *= -1
+            SND_WALL.play()
         if self.difficulty == "A":
             if abs(self.speed_x) < 15:
                 self.speed_x *= 1.001
@@ -314,18 +331,21 @@ def main_game(difficulty="E", max_points=5, two_player=True):
             if ball.rect.colliderect(paddle1.rect):
                 ball.speed_x *= -1
                 ball.rect.left = paddle1.rect.right
+                SND_PADDLE.play()
             if ball.rect.colliderect(paddle2.rect):
                 ball.speed_x *= -1
                 ball.rect.right = paddle2.rect.left
-
+                SND_PADDLE.play()
             if ball.rect.left <= 0:
                 score2 += 1
                 ball.reset()
+                SND_SCORE.play()
                 pause_after_score = True
                 pause_start_time = pygame.time.get_ticks()
             if ball.rect.right >= BASE_WIDTH:
                 score1 += 1
                 ball.reset()
+                SND_SCORE.play()
                 pause_after_score = True
                 pause_start_time = pygame.time.get_ticks()
         else:
@@ -339,10 +359,12 @@ def main_game(difficulty="E", max_points=5, two_player=True):
         if score1 >= max_points:
             winner_text = "PLAYER 1 WINS!"
             winner = 1
+            SND_WIN.play()
             run = False
         elif score2 >= max_points:
             winner_text = "PLAYER 2 WINS!" if two_player else "AI WINS!"
             winner = 2
+            SND_WIN.play()
             run = False
 
     WIN.fill((0, 0, 0))
