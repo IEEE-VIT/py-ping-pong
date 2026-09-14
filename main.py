@@ -26,11 +26,23 @@ FPS = 60
 
 WHITE = (255, 255, 255)
 GREEN = (0, 255, 0)
+RED = (255, 80, 80)
 STAR_COLOR = (200, 200, 255)
 NEON_BLUE = (0, 255, 255)
 
 LEADERBOARD_FILE = "high_scores.json"
 MAX_LEADERBOARD_ITEMS = 10
+
+# Default Keybindings
+DEFAULT_KEYS = {
+    "P1_UP": pygame.K_w,
+    "P1_DOWN": pygame.K_s,
+    "P2_UP": pygame.K_UP,
+    "P2_DOWN": pygame.K_DOWN,
+}
+
+# Session Keybindings State
+controls = DEFAULT_KEYS.copy()
 
 try:
     FONT = pygame.font.Font("PressStart2P.ttf", 30)
@@ -72,7 +84,6 @@ def make_sound(notes, volume=0.35):
     for frequency, duration in notes:
         count = int(sample_rate * duration)
         for index in range(count):
-            # A short fade prevents clicks at the start and end of each note.
             fade = min(1, index / max(1, sample_rate * 0.008),
                        (count - index - 1) / max(1, sample_rate * 0.012))
             value = int(32767 * volume * fade * (1 if math.sin(2 * math.pi * frequency * index / sample_rate) >= 0 else -1))
@@ -172,13 +183,18 @@ class Ball:
         self.ready_to_move = True
 
     def draw(self):
-        for i, old_rect in enumerate(self.trail):
-            alpha = int(255 * (i / self.trail_length))
-            scaled_old = scale_rect(old_rect)
-            trail_surf = pygame.Surface((scaled_old.width, scaled_old.height))
-            trail_surf.set_alpha(alpha)
-            trail_surf.fill(GREEN)
-            WIN.blit(trail_surf, (scaled_old.x, scaled_old.y))
+        if self.trail:
+            trail_layer = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            scale_x, scale_y = get_scale_factors()
+            base_radius = max(2, int(BALL_SIZE * min(scale_x, scale_y) / 2))
+            trail_length = len(self.trail)
+            for index, position in enumerate(self.trail):
+                progress = (index + 1) / trail_length
+                radius = max(1, int(base_radius * progress))
+                alpha = int(25 + 150 * progress)
+                pygame.draw.circle(trail_layer, (*GREEN, alpha),
+                                   scale_pos(*position), radius)
+            WIN.blit(trail_layer, (0, 0))
         pygame.draw.rect(WIN, GREEN, scale_rect(self.rect))
 
     def move(self):
@@ -219,7 +235,6 @@ class PowerUp:
 
 
 class Asteroid:
-    """A vertically drifting center-field obstacle that only affects the ball."""
     def __init__(self, x):
         self.x = x
         self.y = random.randint(45, BASE_HEIGHT - 45)
@@ -239,7 +254,6 @@ class Asteroid:
         radius = max(2, int(self.radius * min(scale_x, scale_y)))
         pygame.draw.circle(WIN, (115, 120, 135), center, radius)
         pygame.draw.circle(WIN, (175, 180, 195), center, radius, 1)
-        # A couple of craters keep the obstacle readable against the starfield.
         pygame.draw.circle(WIN, (75, 80, 95),
                            (center[0] - radius // 3, center[1] - radius // 4),
                            max(1, radius // 4))
@@ -248,8 +262,7 @@ class Asteroid:
                            max(1, radius // 6))
 
 
-# ---------- LeaderboarD Utilities ----------
-#random
+# ---------- Leaderboard Utilities ----------
 def load_leaderboard():
     if not os.path.exists(LEADERBOARD_FILE):
         return []
@@ -287,7 +300,6 @@ def add_score_to_leaderboard(name, points, mode):
 
 # ---------- UI Helpers ----------
 def draw_power_up(power_up):
-    """Draw the active power-up as a labelled, glowing diamond."""
     if power_up is None:
         return
     color = POWER_UP_TYPES[power_up.kind]["color"]
@@ -302,7 +314,6 @@ def draw_power_up(power_up):
 
 
 def draw_effect_indicators(effects, current_time):
-    """Show shields and the remaining effect time for each player."""
     for player, x in ((1, 20), (2, WIDTH - 145)):
         active = [name.upper() for name, end in effects[player].items()
                   if end > current_time and name != "size"]
@@ -338,9 +349,93 @@ def draw_window(paddle1, paddle2, ball, score1, score2, power_up=None,
     pygame.display.update()
 
 
-def render_centered_text(text, font, y):
-    surf = font.render(text, True, WHITE)
+def render_centered_text(text, font, y, color=WHITE):
+    surf = font.render(text, True, color)
     WIN.blit(surf, (WIDTH // 2 - surf.get_width() // 2, y))
+
+
+# ---------- Controls Customization Menu ----------
+def controls_menu():
+    global WIDTH, HEIGHT, WIN
+    clock = pygame.time.Clock()
+    selected_index = 0
+    actions = [("P1 Up", "P1_UP"), ("P1 Down", "P1_DOWN"), ("P2 Up", "P2_UP"), ("P2 Down", "P2_DOWN")]
+    listening = False
+    message = "Use UP/DOWN to navigate, ENTER to change"
+    message_color = WHITE
+
+    while True:
+        clock.tick(FPS)
+        WIN.fill((0, 0, 0))
+        render_centered_text("CUSTOMIZE CONTROLS", FONT, 30)
+
+        y = 110
+        for i, (label, key_name) in enumerate(actions):
+            key_str = pygame.key.name(controls[key_name]).upper()
+            if listening and i == selected_index:
+                text = f"{label}: [ PRESS ANY KEY ]"
+                color = GREEN
+            else:
+                text = f"{label}: {key_str}"
+                color = GREEN if i == selected_index else WHITE
+            render_centered_text(text, MENU_FONT, y, color)
+            y += 40
+
+        render_centered_text("Press R to Reset Defaults", MENU_FONT, y + 20, WHITE)
+        render_centered_text("Press ESC to Return", MENU_FONT, y + 50, WHITE)
+        render_centered_text(message, MENU_FONT, HEIGHT - 40, message_color)
+
+        pygame.display.update()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.VIDEORESIZE:
+                WIDTH, HEIGHT = event.w, event.h
+                WIN = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
+
+            if listening:
+                if event.type == pygame.KEYDOWN:
+                    if event.key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_p):
+                        message = "System keys (ESC/ENTER/P) cannot be assigned!"
+                        message_color = RED
+                        listening = False
+                        play_sound("wall")
+                    else:
+                        target_action = actions[selected_index][1]
+                        conflict = any(k_val == event.key for k_act, k_val in controls.items() if k_act != target_action)
+                        if conflict:
+                            message = "Key conflict! Already assigned to another control."
+                            message_color = RED
+                            play_sound("wall")
+                        else:
+                            controls[target_action] = event.key
+                            message = f"Rebound {actions[selected_index][0]}!"
+                            message_color = GREEN
+                            play_sound("menu")
+                        listening = False
+            else:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        play_sound("menu")
+                        return
+                    elif event.key == pygame.K_UP:
+                        selected_index = (selected_index - 1) % len(actions)
+                        play_sound("menu")
+                    elif event.key == pygame.K_DOWN:
+                        selected_index = (selected_index + 1) % len(actions)
+                        play_sound("menu")
+                    elif event.key == pygame.K_RETURN:
+                        listening = True
+                        message = "Press the new key for this action..."
+                        message_color = GREEN
+                        play_sound("menu")
+                    elif event.key == pygame.K_r:
+                        controls.update(DEFAULT_KEYS)
+                        message = "Controls reset to default!"
+                        message_color = GREEN
+                        play_sound("menu")
 
 
 # ---------- Power-up Effects ----------
@@ -356,7 +451,6 @@ def update_power_up_effects(paddle1, paddle2, effects, current_time):
 
 
 def apply_power_up(power_up, player, ball, effects, current_time, ball_effect):
-    """Apply a collected power-up and return the updated global ball effect."""
     kind = power_up.kind
     player_effects = effects[player]
     if kind == "speed":
@@ -367,7 +461,6 @@ def apply_power_up(power_up, player, ball, effects, current_time, ball_effect):
     elif kind == "shield":
         player_effects["shield"] = current_time + POWER_UP_EFFECT_TIME
     else:
-        # Undo an existing ball modifier before replacing it, avoiding compounding.
         if ball_effect["until"] > current_time:
             ball.speed_x /= ball_effect["factor"]
             ball.speed_y /= ball_effect["factor"]
@@ -380,7 +473,6 @@ def apply_power_up(power_up, player, ball, effects, current_time, ball_effect):
 
 
 def bounce_ball_off_asteroid(ball, asteroid):
-    """Reflect the ball on the dominant collision axis and move it outside."""
     ball_x, ball_y = ball.rect.center
     delta_x = ball_x - asteroid.x
     delta_y = ball_y - asteroid.y
@@ -549,14 +641,14 @@ def main_game(difficulty="E", max_points=5, two_player=True):
             next_power_up = current_time + random.randint(4000, 7000)
 
         if not pause_after_score:
-            if keys[pygame.K_w]:
+            if keys[controls["P1_UP"]]:
                 paddle1.move(up=True)
-            if keys[pygame.K_s]:
+            if keys[controls["P1_DOWN"]]:
                 paddle1.move(up=False)
             if two_player:
-                if keys[pygame.K_UP]:
+                if keys[controls["P2_UP"]]:
                     paddle2.move(up=True)
-                if keys[pygame.K_DOWN]:
+                if keys[controls["P2_DOWN"]]:
                     paddle2.move(up=False)
             else:
                 if paddle2.rect.centery < ball.rect.centery:
@@ -670,7 +762,7 @@ def main_game(difficulty="E", max_points=5, two_player=True):
 
 # ---------- Main Menu ----------
 def main_menu():
-    global WIDTH, HEIGHT, WIN   # ✅ FIXED: declare global at top
+    global WIDTH, HEIGHT, WIN
     run = True
     difficulty = "E"
     max_points = 5
@@ -679,25 +771,28 @@ def main_menu():
     while run:
         WIN.fill((0, 0, 0))
         title = FONT.render("PIXEL PING PONG", True, GREEN)
-        WIN.blit(title, (WIDTH // 2 - title.get_width() // 2, 50))
+        WIN.blit(title, (WIDTH // 2 - title.get_width() // 2, 30))
 
         diff_text = MENU_FONT.render(f"Difficulty: {difficulty} (E/C/A/R)", True, WHITE)
-        WIN.blit(diff_text, (WIDTH // 2 - diff_text.get_width() // 2, 150))
+        WIN.blit(diff_text, (WIDTH // 2 - diff_text.get_width() // 2, 110))
 
         points_text = MENU_FONT.render(f"Max Points: {max_points} (UP/DOWN)", True, WHITE)
-        WIN.blit(points_text, (WIDTH // 2 - points_text.get_width() // 2, 200))
+        WIN.blit(points_text, (WIDTH // 2 - points_text.get_width() // 2, 150))
 
         mode_text = MENU_FONT.render(f"Mode: {'2 Player' if two_player else 'Single Player'} (M to toggle)", True, WHITE)
-        WIN.blit(mode_text, (WIDTH // 2 - mode_text.get_width() // 2, 250))
+        WIN.blit(mode_text, (WIDTH // 2 - mode_text.get_width() // 2, 190))
+
+        controls_text = MENU_FONT.render("Press C to Customize Controls", True, GREEN)
+        WIN.blit(controls_text, (WIDTH // 2 - controls_text.get_width() // 2, 230))
 
         start_text = MENU_FONT.render("Press ENTER to Start", True, GREEN)
-        WIN.blit(start_text, (WIDTH // 2 - start_text.get_width() // 2, 300))
+        WIN.blit(start_text, (WIDTH // 2 - start_text.get_width() // 2, 270))
 
         leader_text = MENU_FONT.render("Press L to view Leaderboard", True, WHITE)
-        WIN.blit(leader_text, (WIDTH // 2 - leader_text.get_width() // 2, 330))
+        WIN.blit(leader_text, (WIDTH // 2 - leader_text.get_width() // 2, 310))
 
         pause_text = MENU_FONT.render("Press P to Pause in-game", True, GREEN)
-        WIN.blit(pause_text, (WIDTH // 2 - pause_text.get_width() // 2, 360))
+        WIN.blit(pause_text, (WIDTH // 2 - pause_text.get_width() // 2, 350))
 
         pygame.display.update()
 
@@ -711,34 +806,34 @@ def main_menu():
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN:
                     play_sound("menu")
-                    selected_difficulty=difficulty
+                    selected_difficulty = difficulty
                     if difficulty == "R":
-                        selected_difficulty=random.choice(["E","C","A"])
+                        selected_difficulty = random.choice(["E", "C", "A"])
                     main_game(selected_difficulty, max_points, two_player)
-                if event.key == pygame.K_e:
+                elif event.key == pygame.K_e:
                     play_sound("menu")
                     difficulty = "E"
-                if event.key == pygame.K_c:
+                elif event.key == pygame.K_c:
                     play_sound("menu")
-                    difficulty = "C"
-                if event.key == pygame.K_a:
+                    controls_menu()
+                elif event.key == pygame.K_a:
                     play_sound("menu")
                     difficulty = "A"
-                if event.key == pygame.K_r:
+                elif event.key == pygame.K_r:
                     play_sound("menu")
                     difficulty = "R"
-                if event.key == pygame.K_m:
+                elif event.key == pygame.K_m:
                     play_sound("menu")
                     two_player = not two_player
-                if event.key == pygame.K_UP:
+                elif event.key == pygame.K_UP:
                     if max_points < 20:
                         max_points += 1
                         play_sound("menu")
-                if event.key == pygame.K_DOWN:
+                elif event.key == pygame.K_DOWN:
                     if max_points > 1:
                         max_points -= 1
                         play_sound("menu")
-                if event.key == pygame.K_l:
+                elif event.key == pygame.K_l:
                     play_sound("menu")
                     show_leaderboard_screen()
 
