@@ -520,4 +520,55 @@ def start_game():
         
     print(f"Match started! Internal Active Difficulty: {active_difficulty}")
     # Proceed to transition game state (e.g., state = GAMEPLAY)
+    import pygame
+from collections import deque
+
+# 1. Initialize Ball Position and Trail History
+ball_pos = pygame.math.Vector2(400, 300)
+ball_speed = pygame.math.Vector2(7, 4)
+ball_radius = 10
+
+# Store the last 10 positions (maxlen automatically drops older positions)
+TRAIL_LENGTH = 10
+ball_trail = deque(maxlen=TRAIL_LENGTH)
+
+def update_ball():
+    global ball_pos
     
+    # Record current position before moving
+    ball_trail.appendleft(pygame.math.Vector2(ball_pos))
+    
+    # Update position
+    ball_pos += ball_speed
+
+def reset_ball():
+    global ball_pos, ball_speed
+    ball_pos = pygame.math.Vector2(400, 300)
+    # Clear the trail immediately on round reset/scoring
+    ball_trail.clear()
+
+def draw_ball_and_trail(surface):
+    # Base green color for the ball: RGB (0, 255, 128)
+    base_color = (0, 255, 128)
+    
+    # 2. Draw Fading Trail
+    # Create a temporary surface with per-pixel alpha for smooth transparency
+    trail_surface = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
+    
+    for i, pos in enumerate(ball_trail):
+        # Calculate fade factor (1.0 for newest history point, down to ~0.1 for oldest)
+        fade_ratio = 1.0 - (i / TRAIL_LENGTH)
+        
+        # Scale alpha (opacity) and radius to shrink and fade
+        alpha = int(255 * fade_ratio * 0.6)  # 60% max opacity for trail softness
+        radius = int(ball_radius * fade_ratio)
+        
+        if radius > 0:
+            color_with_alpha = (*base_color, alpha)
+            pygame.draw.circle(trail_surface, color_with_alpha, (int(pos.x), int(pos.y)), radius)
+            
+    # Blit the transparent trail layer onto the main display
+    surface.blit(trail_surface, (0, 0))
+    
+    # 3. Draw Main Ball (Solid Header)
+    pygame.draw.circle(surface, base_color, (int(ball_pos.x), int(ball_pos.y)), ball_radius)
