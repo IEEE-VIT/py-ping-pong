@@ -443,3 +443,36 @@ if __name__ == "__main__":
     if not os.path.exists(LEADERBOARD_FILE):
         save_leaderboard([])
     main_menu()
+
+import pygame
+import numpy as np
+
+# 1. Place pre_init BEFORE pygame.init() near the top of your file
+pygame.mixer.pre_init(frequency=44100, size=-16, channels=1, buffer=512)
+pygame.init()
+pygame.mixer.init()
+
+# 2. Add the generator function in your script
+def generate_tone(frequency, duration, wave_type="sine"):
+    n_samples = int(44100 * duration)
+    t = np.linspace(0, duration, n_samples, False)
+    
+    if wave_type == "square":
+        samples = np.sign(np.sin(2 * np.pi * frequency * t))
+    else:
+        samples = np.sin(2 * np.pi * frequency * t)
+        
+    envelope = np.linspace(1.0, 0.0, n_samples)
+    audio_data = ((samples * envelope) * 32767).astype(np.int16)
+    return pygame.mixer.Sound(buffer=audio_data.tobytes())
+
+# 3. Create the sounds right after initializing Pygame
+sound_paddle = generate_tone(440, 0.08, "square")
+sound_wall = generate_tone(220, 0.06, "sine")
+
+# 4. Call .play() inside your game loop where collisions happen
+# Example inside main loop:
+# if ball.colliderect(paddle):
+#     sound_paddle.play()
+
+
