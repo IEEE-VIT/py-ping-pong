@@ -83,6 +83,7 @@ class Ball:
         self.difficulty = difficulty
         if self.difficulty == "R":
             self.difficulty = random.choice(["E", "C", "A"])
+        self.trail = []
         self.reset()
 
     def reset(self):
@@ -91,13 +92,37 @@ class Ball:
         self.speed_y = 0
         self.base_speed = DIFFICULTY_SPEED[self.difficulty]
         self.ready_to_move = False
+        self.trail.clear()
 
     def start_movement(self):
         self.speed_x = random.choice([-1, 1]) * random.randint(4, 6)
         self.speed_y = random.choice([-1, 1]) * random.randint(2, 4)
         self.ready_to_move = True
 
+    def add_trail(self):
+        if not self.ready_to_move:
+            return
+        self.trail.append({
+            "rect": self.rect.copy(),
+            "life": 10,
+            "color": GREEN,
+        })
+        if len(self.trail) > 12:
+            self.trail.pop(0)
+
+    def draw_trail(self):
+        for particle in self.trail:
+            alpha = max(0, int((particle["life"] / 10) * 255))
+            color = particle["color"]
+            faded = (color[0], color[1], color[2], alpha)
+            surface = pygame.Surface((particle["rect"].width, particle["rect"].height), pygame.SRCALPHA)
+            surface.fill(faded)
+            WIN.blit(surface, scale_rect(particle["rect"]))
+            particle["life"] -= 1
+        self.trail = [p for p in self.trail if p["life"] > 0]
+
     def draw(self):
+        self.draw_trail()
         pygame.draw.rect(WIN, GREEN, scale_rect(self.rect))
 
     def move(self):
@@ -105,6 +130,7 @@ class Ball:
             return
         self.rect.x += self.speed_x
         self.rect.y += self.speed_y
+        self.add_trail()
         if self.rect.top <= 0 or self.rect.bottom >= BASE_HEIGHT:
             self.speed_y *= -1
         if self.difficulty == "A":
