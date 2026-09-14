@@ -246,7 +246,7 @@ def pause_menu(custom_message="GAME PAUSED"):
     while paused:
         WIN.fill((0, 0, 0))
         render_centered_text(custom_message, FONT, 100)
-        render_centered_text("Press R to Resume", MENU_FONT, 180)
+        render_centered_text("Press Re to Resume", MENU_FONT, 180)
         render_centered_text("Press Q to Quit", MENU_FONT, 220)
         pygame.display.update()
 
@@ -390,7 +390,7 @@ def main_menu():
         title = FONT.render("PIXEL PING PONG", True, GREEN)
         WIN.blit(title, (WIDTH // 2 - title.get_width() // 2, 50))
 
-        diff_text = MENU_FONT.render(f"Difficulty: {difficulty} (E/C/A)", True, WHITE)
+        diff_text = MENU_FONT.render(f"Difficulty: {difficulty} (E/C/A/R)", True, WHITE)
         WIN.blit(diff_text, (WIDTH // 2 - diff_text.get_width() // 2, 150))
 
         points_text = MENU_FONT.render(f"Max Points: {max_points} (UP/DOWN)", True, WHITE)
@@ -426,6 +426,8 @@ def main_menu():
                     difficulty = "C"
                 if event.key == pygame.K_a:
                     difficulty = "A"
+                if event.key==random.choice(pygame.K_a,pygame.K_c,pygame.K_e):
+                    difficulty="R"
                 if event.key == pygame.K_m:
                     two_player = not two_player
                 if event.key == pygame.K_UP:
