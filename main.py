@@ -475,4 +475,49 @@ sound_wall = generate_tone(220, 0.06, "sine")
 # if ball.colliderect(paddle):
 #     sound_paddle.play()
 
+import pygame
+import random
 
+# Initial selected option on main menu: 'E', 'C', 'A', or 'R'
+selected_difficulty_option = 'E'
+
+# Variable to hold the actual active game difficulty during a match
+active_difficulty = None
+
+def handle_menu_input(event):
+    global selected_difficulty_option
+    
+    if event.type == pygame.KEYDOWN:
+        if event.key == pygame.K_e:
+            selected_difficulty_option = 'E'
+        elif event.key == pygame.K_c:
+            selected_difficulty_option = 'C'
+        elif event.key == pygame.K_a:
+            selected_difficulty_option = 'A'
+        elif event.key == pygame.K_r:
+            selected_difficulty_option = 'R'
+        elif event.key == pygame.K_RETURN:
+            start_game()
+
+def get_difficulty_display_text():
+    if selected_difficulty_option == 'R':
+        return "Difficulty: R (Random)"
+    elif selected_difficulty_option == 'E':
+        return "Difficulty: E (Easy)"
+    elif selected_difficulty_option == 'C':
+        return "Difficulty: C (Challenging)"
+    elif selected_difficulty_option == 'A':
+        return "Difficulty: A (Advanced)"
+
+def start_game():
+    global active_difficulty
+    
+    # Secretly lock in one of E, C, or A if Random ('R') was selected
+    if selected_difficulty_option == 'R':
+        active_difficulty = random.choice(['E', 'C', 'A'])
+    else:
+        active_difficulty = selected_difficulty_option
+        
+    print(f"Match started! Internal Active Difficulty: {active_difficulty}")
+    # Proceed to transition game state (e.g., state = GAMEPLAY)
+    
