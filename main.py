@@ -390,7 +390,7 @@ def main_menu():
         title = FONT.render("PIXEL PING PONG", True, GREEN)
         WIN.blit(title, (WIDTH // 2 - title.get_width() // 2, 50))
 
-        diff_text = MENU_FONT.render(f"Difficulty: {difficulty} (E/C/A)", True, WHITE)
+        diff_text = MENU_FONT.render(f"Difficulty: {difficulty} (E/C/A/R)", True, WHITE)
         WIN.blit(diff_text, (WIDTH // 2 - diff_text.get_width() // 2, 150))
 
         points_text = MENU_FONT.render(f"Max Points: {max_points} (UP/DOWN)", True, WHITE)
@@ -419,13 +419,18 @@ def main_menu():
                 WIN = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN:
-                    main_game(difficulty, max_points, two_player)
+                    selected_difficulty=difficulty
+                    if difficulty == "R":
+                        selected_difficulty=random.choice(["E","C","A"])
+                    main_game(selected_difficulty, max_points, two_player)
                 if event.key == pygame.K_e:
                     difficulty = "E"
                 if event.key == pygame.K_c:
                     difficulty = "C"
                 if event.key == pygame.K_a:
                     difficulty = "A"
+                if event.key == pygame.K_r:
+                    difficulty = "R"
                 if event.key == pygame.K_m:
                     two_player = not two_player
                 if event.key == pygame.K_UP:
