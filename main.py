@@ -127,8 +127,15 @@ class Paddle:
 
 class Ball:
     def __init__(self, difficulty="E"):
-        self.rect = pygame.Rect(BASE_WIDTH // 2, BASE_HEIGHT // 2, BALL_SIZE, BALL_SIZE)
+        self.rect = pygame.Rect(
+            BASE_WIDTH // 2,
+            BASE_HEIGHT // 2,
+            BALL_SIZE,
+            BALL_SIZE
+        )
         self.difficulty = difficulty
+        self.trail = []
+        self.max_trail_length = 10
         self.reset()
 
     def reset(self):
@@ -138,19 +145,58 @@ class Ball:
         self.base_speed = DIFFICULTY_SPEED[self.difficulty]
         self.ready_to_move = False
 
+        # Clear the trail whenever the ball is reset after a score.
+        self.trail.clear()
+
     def start_movement(self):
         self.speed_x = random.choice([-1, 1]) * random.randint(4, 6)
         self.speed_y = random.choice([-1, 1]) * random.randint(2, 4)
         self.ready_to_move = True
 
     def draw(self):
+        # Draw the oldest trail positions first so the newest positions
+        # appear directly behind the ball.
+        trail_surface = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+
+        trail_length = len(self.trail)
+
+        for index, (x, y) in enumerate(self.trail):
+            progress = (index + 1) / max(1, trail_length)
+
+            # Older positions are smaller and more transparent.
+            size = max(2, int(BALL_SIZE * progress))
+            alpha = max(25, int(180 * progress))
+
+            scaled_x, scaled_y = scale_pos(x, y)
+            trail_rect = pygame.Rect(
+                scaled_x - size // 2,
+                scaled_y - size // 2,
+                size,
+                size
+            )
+
+            pygame.draw.rect(
+                trail_surface,
+                (*GREEN, alpha),
+                trail_rect
+            )
+
+        WIN.blit(trail_surface, (0, 0))
+
+        # Draw the actual ball on top of the trail.
         pygame.draw.rect(WIN, GREEN, scale_rect(self.rect))
 
     def move(self):
         if not self.ready_to_move:
             return False
+
         self.rect.x += self.speed_x
         self.rect.y += self.speed_y
+
+        # Store the ball's current center for the fading trail effect.
+        self.trail.append(self.rect.center)
+        if len(self.trail) > self.max_trail_length:
+            self.trail.pop(0)
         if self.rect.top <= 0 or self.rect.bottom >= BASE_HEIGHT:
             self.speed_y *= -1
             wall_bounce = True
