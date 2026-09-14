@@ -31,6 +31,55 @@ NEON_BLUE = (0, 255, 255)
 LEADERBOARD_FILE = "high_scores.json"
 MAX_LEADERBOARD_ITEMS = 10
 
+# ---------- Controls Configuration ----------
+CONTROLS_FILE = "controls.json"
+
+controls = {
+    "P1_UP": pygame.K_w,
+    "P1_DOWN": pygame.K_s,
+    "P2_UP": pygame.K_UP,
+    "P2_DOWN": pygame.K_DOWN,
+}
+
+KEY_NAMES = {
+    pygame.K_w: "W",
+    pygame.K_s: "S",
+    pygame.K_UP: "UP",
+    pygame.K_DOWN: "DOWN",
+    pygame.K_a: "A",
+    pygame.K_d: "D",
+    pygame.K_q: "Q",
+    pygame.K_e: "E",
+    pygame.K_i: "I",
+    pygame.K_k: "K",
+    pygame.K_j: "J",
+    pygame.K_l: "L",
+    pygame.K_SPACE: "SPACE",
+}
+
+def get_key_name(key_code):
+    if key_code in KEY_NAMES:
+        return KEY_NAMES[key_code]
+    name = pygame.key.name(key_code).upper()
+    return name if len(name) <= 6 else name[:6]
+
+def load_controls():
+    global controls
+    if os.path.exists(CONTROLS_FILE):
+        try:
+            with open(CONTROLS_FILE, "r") as f:
+                saved = json.load(f)
+                controls.update(saved)
+        except Exception:
+            pass
+
+def save_controls():
+    try:
+        with open(CONTROLS_FILE, "w") as f:
+            json.dump(controls, f, indent=2)
+    except Exception as e:
+        print("Error saving controls:", e)
+
 try:
     FONT = pygame.font.Font("PressStart2P.ttf", 30)
     MENU_FONT = pygame.font.Font("PressStart2P.ttf", 20)
@@ -72,6 +121,7 @@ SOUNDS = {
     "win": make_sound([(523, 0.09), (659, 0.09), (784, 0.18)], 0.36),
     "high_score": make_sound([(659, 0.08), (784, 0.08), (988, 0.08), (1319, 0.22)], 0.40),
     "menu": make_sound([(600, 0.035)], 0.18),
+    "bind": make_sound([(880, 0.06), (1174, 0.08)], 0.25),
 }
 
 def play_sound(name):
@@ -155,80 +205,6 @@ class Ball:
                 self.speed_y *= 1.001
         return wall_bounce
 
-# ---------- Asteroid Class ----------
-ORANGE = (255, 165, 0)
-
-class Asteroid:
-    def __init__(self, x=None, y=None, radius=20):
-        self.radius = radius
-        # Keep asteroids spawned in the central play area to avoid trap-spawning on paddles
-        self.x = x if x is not None else float(random.randint(200, BASE_WIDTH - 200))
-        self.y = y if y is not None else float(random.randint(50, BASE_HEIGHT - 50))
-        
-        # Random floating velocity
-        angle = random.uniform(0, 2 * math.pi)
-        speed = random.uniform(1.0, 2.5)
-        self.vx = math.cos(angle) * speed
-        self.vy = math.sin(angle) * speed
-
-    def update(self):
-        self.x += self.vx
-        self.y += self.vy
-
-        # Bounce off top and bottom boundaries
-        if self.y - self.radius <= 0:
-            self.y = self.radius
-            self.vy *= -1
-        elif self.y + self.radius >= BASE_HEIGHT:
-            self.y = BASE_HEIGHT - self.radius
-            self.vy *= -1
-
-        # Bounce off middle field left/right bounds (keeping them in play field)
-        if self.x - self.radius <= 120:
-            self.x = 120 + self.radius
-            self.vx *= -1
-        elif self.x + self.radius >= BASE_WIDTH - 120:
-            self.x = BASE_WIDTH - 120 - self.radius
-            self.vx *= -1
-
-    def draw(self):
-        sx, sy = scale_pos(self.x, self.y)
-        scale_x, _ = get_scale_factors()
-        s_radius = int(self.radius * scale_x)
-
-        # Neon double-ring glow outline
-        pygame.draw.circle(WIN, ORANGE, (sx, sy), s_radius, 2)
-        pygame.draw.circle(WIN, (255, 200, 100), (sx, sy), max(1, s_radius - 3), 1)
-
-    def check_collision(self, ball):
-        """Checks radial collision with ball and bounces the ball realistically."""
-        ball_center_x = ball.rect.centerx
-        ball_center_y = ball.rect.centery
-        dx = ball_center_x - self.x
-        dy = ball_center_y - self.y
-        distance = math.hypot(dx, dy)
-
-        min_dist = self.radius + (BALL_SIZE / 2)
-        if distance < min_dist and distance > 0:
-            # Normal vector at collision point
-            nx = dx / distance
-            ny = dy / distance
-
-            # Dot product of ball velocity and normal
-            dot = ball.speed_x * nx + ball.speed_y * ny
-
-            # Reflect velocity vector: V_new = V - 2*(V . N)*N
-            ball.speed_x -= 2 * dot * nx
-            ball.speed_y -= 2 * dot * ny
-
-            # Push ball slightly outside asteroid to prevent sticking
-            overlap = min_dist - distance
-            ball.rect.x += int(nx * overlap)
-            ball.rect.y += int(ny * overlap)
-
-            return True
-        return False
-
 # ---------- Leaderboard Utilities ----------
 def load_leaderboard():
     if not os.path.exists(LEADERBOARD_FILE):
@@ -263,18 +239,13 @@ def add_score_to_leaderboard(name, points, mode):
     save_leaderboard(entries)
 
 # ---------- UI Helpers ----------
-def draw_window(paddle1, paddle2, ball, asteroids, score1, score2, show_ready=False):
+def draw_window(paddle1, paddle2, ball, score1, score2, show_ready=False):
     WIN.fill((0, 0, 0))
     for star in stars:
         x, y = scale_pos(star[0], star[1])
         pygame.draw.circle(WIN, STAR_COLOR, (x, y), 1)
     for y in range(0, BASE_HEIGHT, 20):
         pygame.draw.rect(WIN, WHITE, scale_rect(pygame.Rect(BASE_WIDTH // 2 - 1, y, 2, 10)))
-    
-    # Draw floating asteroids
-    for asteroid in asteroids:
-        asteroid.draw()
-
     paddle1.draw()
     paddle2.draw()
     ball.draw()
@@ -379,6 +350,108 @@ def pause_menu(custom_message="GAME PAUSED"):
                     pygame.quit()
                     sys.exit()
 
+# ---------- Controls Settings Menu ----------
+def controls_menu():
+    global WIDTH, HEIGHT, WIN
+    clock = pygame.time.Clock()
+    selected_idx = 0
+    actions = ["P1_UP", "P1_DOWN", "P2_UP", "P2_DOWN"]
+    labels = ["P1 Move Up", "P1 Move Down", "P2 Move Up", "P2 Move Down"]
+    remapping = False
+    error_msg = ""
+    error_time = 0
+
+    while True:
+        clock.tick(FPS)
+        WIN.fill((0, 0, 0))
+
+        for star in stars:
+            x, y = scale_pos(star[0], star[1])
+            pygame.draw.circle(WIN, STAR_COLOR, (x, y), 1)
+
+        render_centered_text("CONTROLS SETTINGS", FONT, 30)
+
+        start_y = 110
+        for i, act in enumerate(actions):
+            key_code = controls[act]
+            key_str = get_key_name(key_code)
+
+            if remapping and i == selected_idx:
+                display_str = f"{labels[i]}: [PRESS ANY KEY]"
+            elif i == selected_idx:
+                display_str = f"> {labels[i]}: {key_str} <"
+            else:
+                display_str = f"{labels[i]}: {key_str}"
+
+            render_centered_text(display_str, MENU_FONT, start_y + i * 40)
+
+        now = pygame.time.get_ticks()
+        if error_msg and now - error_time < 2000:
+            err_surf = MENU_FONT.render(error_msg, True, (255, 80, 80))
+            WIN.blit(err_surf, (WIDTH // 2 - err_surf.get_width() // 2, start_y + 180))
+        else:
+            if remapping:
+                hint_str = "Press key to assign (ESC to cancel)"
+            else:
+                hint_str = "UP/DOWN select | ENTER change | ESC exit"
+            render_centered_text(hint_str, MENU_FONT, start_y + 180)
+
+        pygame.display.update()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+            if event.type == pygame.VIDEORESIZE:
+                WIDTH, HEIGHT = event.w, event.h
+                WIN = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
+
+            if event.type == pygame.KEYDOWN:
+                if remapping:
+                    if event.key == pygame.K_ESCAPE:
+                        remapping = False
+                        play_sound("menu")
+                        continue
+
+                    # Reserved system keys check
+                    if event.key in (pygame.K_p, pygame.K_q, pygame.K_r):
+                        error_msg = f"Key '{get_key_name(event.key)}' reserved!"
+                        error_time = pygame.time.get_ticks()
+                        play_sound("wall")
+                        remapping = False
+                        continue
+
+                    # Conflict check (prevent assigning same key twice)
+                    conflict_action = None
+                    for act_key, code in controls.items():
+                        if code == event.key and act_key != actions[selected_idx]:
+                            conflict_action = act_key
+                            break
+
+                    if conflict_action:
+                        error_msg = f"Conflict with {conflict_action.replace('_', ' ')}!"
+                        error_time = pygame.time.get_ticks()
+                        play_sound("wall")
+                    else:
+                        controls[actions[selected_idx]] = event.key
+                        save_controls()
+                        play_sound("bind")
+                    remapping = False
+
+                else:
+                    if event.key == pygame.K_UP:
+                        selected_idx = (selected_idx - 1) % len(actions)
+                        play_sound("menu")
+                    elif event.key == pygame.K_DOWN:
+                        selected_idx = (selected_idx + 1) % len(actions)
+                        play_sound("menu")
+                    elif event.key == pygame.K_RETURN:
+                        remapping = True
+                        play_sound("menu")
+                    elif event.key == pygame.K_ESCAPE:
+                        play_sound("menu")
+                        return
 # ---------- Main Game Loop ----------
 def main_game(difficulty="E", max_points=5, two_player=True):
     global WIDTH, HEIGHT, WIN
@@ -386,7 +459,6 @@ def main_game(difficulty="E", max_points=5, two_player=True):
     paddle1 = Paddle(20, BASE_HEIGHT // 2 - PADDLE_HEIGHT // 2)
     paddle2 = Paddle(BASE_WIDTH - 30, BASE_HEIGHT // 2 - PADDLE_HEIGHT // 2)
     ball = Ball(difficulty)
-    asteroids = [Asteroid() for _ in range(3)]
 
     score1, score2 = 0, 0
     run = True
@@ -409,17 +481,17 @@ def main_game(difficulty="E", max_points=5, two_player=True):
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_p:  # Press P to pause
                     pause_menu()
-
+# --- AFTER ---
         keys = pygame.key.get_pressed()
         if not pause_after_score:
-            if keys[pygame.K_w]:
+            if keys[controls["P1_UP"]]:
                 paddle1.move(up=True)
-            if keys[pygame.K_s]:
+            if keys[controls["P1_DOWN"]]:
                 paddle1.move(up=False)
             if two_player:
-                if keys[pygame.K_UP]:
+                if keys[controls["P2_UP"]]:
                     paddle2.move(up=True)
-                if keys[pygame.K_DOWN]:
+                if keys[controls["P2_DOWN"]]:
                     paddle2.move(up=False)
             else:
                 if paddle2.rect.centery < ball.rect.centery:
@@ -429,11 +501,6 @@ def main_game(difficulty="E", max_points=5, two_player=True):
 
             if ball.move():
                 play_sound("wall")
-
-            for asteroid in asteroids:
-                asteroid.update()
-                if asteroid.check_collision(ball):
-                    play_sound("wall")
 
             if ball.rect.colliderect(paddle1.rect):
                 ball.speed_x *= -1
@@ -462,7 +529,7 @@ def main_game(difficulty="E", max_points=5, two_player=True):
                 pause_after_score = False
                 ball.start_movement()
 
-        draw_window(paddle1, paddle2, ball, asteroids, score1, score2, show_ready=pause_after_score)
+        draw_window(paddle1, paddle2, ball, score1, score2, show_ready=pause_after_score)
 
         if score1 >= max_points:
             winner_text = "PLAYER 1 WINS!"
@@ -531,12 +598,14 @@ def main_menu():
         start_text = MENU_FONT.render("Press ENTER to Start", True, GREEN)
         WIN.blit(start_text, (WIDTH // 2 - start_text.get_width() // 2, 300))
 
-        leader_text = MENU_FONT.render("Press L to view Leaderboard", True, WHITE)
+leader_text = MENU_FONT.render("Press L for Leaderboard", True, WHITE)
         WIN.blit(leader_text, (WIDTH // 2 - leader_text.get_width() // 2, 330))
 
-        pause_text = MENU_FONT.render("Press P to Pause in-game", True, GREEN)
-        WIN.blit(pause_text, (WIDTH // 2 - pause_text.get_width() // 2, 360))
+        controls_text = MENU_FONT.render("Press C for Controls Settings", True, WHITE)
+        WIN.blit(controls_text, (WIDTH // 2 - controls_text.get_width() // 2, 355))
 
+        pause_text = MENU_FONT.render("Press P to Pause in-game", True, GREEN)
+        WIN.blit(pause_text, (WIDTH // 2 - pause_text.get_width() // 2, 380))    
         pygame.display.update()
 
         for event in pygame.event.get():
@@ -579,13 +648,15 @@ def main_menu():
                 if event.key == pygame.K_l:
                     play_sound("menu")
                     show_leaderboard_screen()
+                if event.key == pygame.K_c:
+                    play_sound("menu")
+                    controls_menu()
 
 # ---------- Entry Point ----------
 if __name__ == "__main__":
+    load_controls()  # Loads custom saved keys from controls.json on startup
     if not os.path.exists(LEADERBOARD_FILE):
         save_leaderboard([])
     main_menu()
-
- 
 
 
