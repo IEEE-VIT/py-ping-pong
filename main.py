@@ -8,6 +8,7 @@ import struct
 from datetime import datetime
 
 # ---------- Configuration ----------
+pygame.mixer.pre_init(44100, -16, 1, 512)
 pygame.init()
 pygame.mixer.init(frequency=44100, size=-16, channels=1, buffer=512)
 
@@ -78,6 +79,44 @@ DIFFICULTY_SPEED = {"E": 5, "C": 8, "A": 5}
 stars = [(random.randint(0, BASE_WIDTH), random.randint(0, BASE_HEIGHT)) for _ in range(150)]
 
 
+# ---------- Synthesized Sound Effects ----------
+def make_sound(notes, volume=0.35):
+    """Create a small square-wave sound without requiring external assets."""
+    if not AUDIO_AVAILABLE:
+        return None
+
+    sample_rate, sample_format, channels = pygame.mixer.get_init()
+    if sample_format != -16:
+        return None
+
+    samples = array("h")
+    for frequency, duration in notes:
+        count = int(sample_rate * duration)
+        for index in range(count):
+            # A short fade prevents clicks at the start and end of each note.
+            fade = min(1, index / max(1, sample_rate * 0.008),
+                       (count - index - 1) / max(1, sample_rate * 0.012))
+            value = int(32767 * volume * fade * (1 if math.sin(2 * math.pi * frequency * index / sample_rate) >= 0 else -1))
+            samples.extend([value] * channels)
+    return pygame.mixer.Sound(buffer=samples.tobytes())
+
+
+SOUNDS = {
+    "paddle": make_sound([(740, 0.055)], 0.28),
+    "wall": make_sound([(420, 0.045)], 0.20),
+    "score": make_sound([(330, 0.08), (220, 0.12)], 0.30),
+    "win": make_sound([(523, 0.09), (659, 0.09), (784, 0.18)], 0.36),
+    "high_score": make_sound([(659, 0.08), (784, 0.08), (988, 0.08), (1319, 0.22)], 0.40),
+    "menu": make_sound([(600, 0.035)], 0.18),
+}
+
+
+def play_sound(name):
+    sound = SOUNDS.get(name)
+    if sound is not None:
+        sound.play()
+
+
 # ---------- Scaling Utilities ----------
 def get_scale_factors():
     return WIDTH / BASE_WIDTH, HEIGHT / BASE_HEIGHT
@@ -143,7 +182,7 @@ class Ball:
 
     def move(self):
         if not self.ready_to_move:
-            return
+            return False
         self.rect.x += self.speed_x
         self.rect.y += self.speed_y
         if self.rect.top <= 0 or self.rect.bottom >= BASE_HEIGHT:
@@ -154,6 +193,7 @@ class Ball:
                 self.speed_x *= 1.001
             if abs(self.speed_y) < 15:
                 self.speed_y *= 1.001
+        return wall_bounce
 
 
 # ---------- Leaderboard Utilities ----------
@@ -231,6 +271,7 @@ def text_input(prompt, max_chars=10):
                 sys.exit()
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN:
+                    play_sound("menu")
                     active = False
                 elif event.key == pygame.K_BACKSPACE:
                     input_text = input_text[:-1]
@@ -266,6 +307,7 @@ def show_leaderboard_screen():
                 sys.exit()
             if event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_ESCAPE, pygame.K_RETURN):
+                    play_sound("menu")
                     run = False
 
         WIN.fill((0, 0, 0))
@@ -300,6 +342,7 @@ def pause_menu(custom_message="GAME PAUSED"):
                 sys.exit()
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_r:
+                    play_sound("menu")
                     paused = False
                 if event.key == pygame.K_q:
                     pygame.quit()
@@ -353,7 +396,8 @@ def main_game(difficulty="E", max_points=5, two_player=True):
                 elif paddle2.rect.centery > ball.rect.centery:
                     paddle2.move(up=True)
 
-            ball.move()
+            if ball.move():
+                play_sound("wall")
 
             if ball.rect.colliderect(paddle1.rect):
                 ball.speed_x *= -1
@@ -368,12 +412,14 @@ def main_game(difficulty="E", max_points=5, two_player=True):
                 score2 += 1
                 SCORE_SOUND.play()
                 ball.reset()
+                play_sound("score")
                 pause_after_score = True
                 pause_start_time = pygame.time.get_ticks()
             if ball.rect.right >= BASE_WIDTH:
                 score1 += 1
                 SCORE_SOUND.play()
                 ball.reset()
+                play_sound("score")
                 pause_after_score = True
                 pause_start_time = pygame.time.get_ticks()
         else:
@@ -414,6 +460,7 @@ def main_game(difficulty="E", max_points=5, two_player=True):
         if qualifies:
             HIGH_SCORE_SOUND.play()
             prompt = "NEW HIGH SCORE! Enter name:"
+            play_sound("high_score")
             name = text_input(prompt, max_chars=10)
             mode = "2P" if two_player else "1P"
             add_score_to_leaderboard(name, player_points, mode)
@@ -469,24 +516,35 @@ def main_menu():
                 WIN = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN:
-                    main_game(difficulty, max_points, two_player)
+                    play_sound("menu")
+                    selected_difficulty=difficulty
+                    if difficulty == "R":
+                        selected_difficulty=random.choice(["E","C","A"])
+                    main_game(selected_difficulty, max_points, two_player)
                 if event.key == pygame.K_e:
+                    play_sound("menu")
                     difficulty = "E"
                 if event.key == pygame.K_c:
+                    play_sound("menu")
                     difficulty = "C"
                 if event.key == pygame.K_a:
+                    play_sound("menu")
                     difficulty = "A"
                 if event.key==random.choice(pygame.K_a,pygame.K_c,pygame.K_e):
                     difficulty="R"
                 if event.key == pygame.K_m:
+                    play_sound("menu")
                     two_player = not two_player
                 if event.key == pygame.K_UP:
                     if max_points < 20:
                         max_points += 1
+                        play_sound("menu")
                 if event.key == pygame.K_DOWN:
                     if max_points > 1:
                         max_points -= 1
+                        play_sound("menu")
                 if event.key == pygame.K_l:
+                    play_sound("menu")
                     show_leaderboard_screen()
 
 
