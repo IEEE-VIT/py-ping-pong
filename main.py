@@ -3,10 +3,53 @@ import sys
 import random
 import json
 import os
+import math
+import struct
 from datetime import datetime
 
 # ---------- Configuration ----------
 pygame.init()
+pygame.mixer.init(frequency=44100, size=-16, channels=1, buffer=512)
+
+def create_tone(frequency, duration, volume=0.25, end_frequency=None):
+    """Create a short synthesized sound without requiring external audio files."""
+    sample_rate = 44100
+    sample_count = int(sample_rate * duration)
+    samples = bytearray()
+
+    for i in range(sample_count):
+        progress = i / max(1, sample_count - 1)
+        if end_frequency is not None:
+            current_frequency = frequency + (end_frequency - frequency) * progress
+        else:
+            current_frequency = frequency
+
+        # Smooth attack/release envelope to avoid clicks.
+        if progress < 0.08:
+            envelope = progress / 0.08
+        elif progress > 0.75:
+            envelope = (1.0 - progress) / 0.25
+        else:
+            envelope = 1.0
+
+        sample = int(
+            32767
+            * volume
+            * envelope
+            * math.sin(2 * math.pi * current_frequency * i / sample_rate)
+        )
+        samples.extend(struct.pack("<h", sample))
+
+    return pygame.mixer.Sound(buffer=bytes(samples))
+
+
+# Synthesized game sounds
+PADDLE_BOUNCE_SOUND = create_tone(700, 0.06, 0.22, 950)
+WALL_BOUNCE_SOUND = create_tone(400, 0.07, 0.20, 650)
+SCORE_SOUND = create_tone(500, 0.14, 0.24, 900)
+WIN_SOUND = create_tone(500, 0.35, 0.28, 1000)
+HIGH_SCORE_SOUND = create_tone(700, 0.18, 0.28, 1400)
+
 BASE_WIDTH, BASE_HEIGHT = 800, 400  # Base resolution
 WIDTH, HEIGHT = BASE_WIDTH, BASE_HEIGHT
 WIN = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
@@ -105,6 +148,7 @@ class Ball:
         self.rect.y += self.speed_y
         if self.rect.top <= 0 or self.rect.bottom >= BASE_HEIGHT:
             self.speed_y *= -1
+            WALL_BOUNCE_SOUND.play()
         if self.difficulty == "A":
             if abs(self.speed_x) < 15:
                 self.speed_x *= 1.001
@@ -314,17 +358,21 @@ def main_game(difficulty="E", max_points=5, two_player=True):
             if ball.rect.colliderect(paddle1.rect):
                 ball.speed_x *= -1
                 ball.rect.left = paddle1.rect.right
+                PADDLE_BOUNCE_SOUND.play()
             if ball.rect.colliderect(paddle2.rect):
                 ball.speed_x *= -1
                 ball.rect.right = paddle2.rect.left
+                PADDLE_BOUNCE_SOUND.play()
 
             if ball.rect.left <= 0:
                 score2 += 1
+                SCORE_SOUND.play()
                 ball.reset()
                 pause_after_score = True
                 pause_start_time = pygame.time.get_ticks()
             if ball.rect.right >= BASE_WIDTH:
                 score1 += 1
+                SCORE_SOUND.play()
                 ball.reset()
                 pause_after_score = True
                 pause_start_time = pygame.time.get_ticks()
@@ -350,6 +398,7 @@ def main_game(difficulty="E", max_points=5, two_player=True):
     WIN.blit(text, (WIDTH // 2 - text.get_width() // 2,
                     HEIGHT // 2 - text.get_height() // 2 - 30))
     pygame.display.update()
+    WIN_SOUND.play()
     pygame.time.delay(1200)
 
     if (not two_player and winner == 1) or (two_player and winner in (1, 2)):
@@ -363,6 +412,7 @@ def main_game(difficulty="E", max_points=5, two_player=True):
                 qualifies = True
 
         if qualifies:
+            HIGH_SCORE_SOUND.play()
             prompt = "NEW HIGH SCORE! Enter name:"
             name = text_input(prompt, max_chars=10)
             mode = "2P" if two_player else "1P"
@@ -379,7 +429,7 @@ def main_game(difficulty="E", max_points=5, two_player=True):
 
 # ---------- Main Menu ----------
 def main_menu():
-    global WIDTH, HEIGHT, WIN   # ✅ FIXED: declare global at top
+    global WIDTH, HEIGHT, WIN   #FIXED: declare global at top
     run = True
     difficulty = "E"
     max_points = 5
@@ -444,4 +494,3 @@ def main_menu():
 if __name__ == "__main__":
     if not os.path.exists(LEADERBOARD_FILE):
         save_leaderboard([])
-    main_menu()
