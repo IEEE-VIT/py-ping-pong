@@ -443,3 +443,32 @@ if __name__ == "__main__":
     if not os.path.exists(LEADERBOARD_FILE):
         save_leaderboard([])
     main_menu()
+# At the top of your main script, after Pygame initialization
+audio = SpaceAudio()
+
+# --- Inside your Game Loop ---
+
+# 1. Paddle Bounce
+if ball.rect.colliderect(paddle_left.rect) or ball.rect.colliderect(paddle_right.rect):
+    ball.bounce_x()
+    audio.play_paddle()
+
+# 2. Wall Bounce (Top and Bottom of screen)
+if ball.rect.top <= 0 or ball.rect.bottom >= SCREEN_HEIGHT:
+    ball.bounce_y()
+    audio.play_wall()
+
+# 3. Score Point / Round Reset
+if ball.rect.left <= 0:
+    right_score += 1
+    audio.play_score()
+    reset_round()
+elif ball.rect.right >= SCREEN_WIDTH:
+    left_score += 1
+    audio.play_score()
+    reset_round()
+
+# 4. Game Win
+if left_score >= MAX_SCORE or right_score >= MAX_SCORE:
+    audio.play_win()
+    show_game_over_screen()
