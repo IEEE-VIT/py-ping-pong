@@ -214,6 +214,36 @@ class PowerUp:
         self.created_at = created_at
 
 
+class Asteroid:
+    """A vertically drifting center-field obstacle that only affects the ball."""
+    def __init__(self, x):
+        self.x = x
+        self.y = random.randint(45, BASE_HEIGHT - 45)
+        self.radius = random.randint(14, 20)
+        self.speed_y = random.choice((-1, 1)) * random.uniform(0.35, 0.8)
+
+    def move(self):
+        self.y += self.speed_y
+        if self.y - self.radius > BASE_HEIGHT:
+            self.y = -self.radius
+        elif self.y + self.radius < 0:
+            self.y = BASE_HEIGHT + self.radius
+
+    def draw(self):
+        center = scale_pos(self.x, self.y)
+        scale_x, scale_y = get_scale_factors()
+        radius = max(2, int(self.radius * min(scale_x, scale_y)))
+        pygame.draw.circle(WIN, (115, 120, 135), center, radius)
+        pygame.draw.circle(WIN, (175, 180, 195), center, radius, 1)
+        # A couple of craters keep the obstacle readable against the starfield.
+        pygame.draw.circle(WIN, (75, 80, 95),
+                           (center[0] - radius // 3, center[1] - radius // 4),
+                           max(1, radius // 4))
+        pygame.draw.circle(WIN, (85, 90, 105),
+                           (center[0] + radius // 3, center[1] + radius // 4),
+                           max(1, radius // 6))
+
+
 # ---------- LeaderboarD Utilities ----------
 #random
 def load_leaderboard():
@@ -280,7 +310,7 @@ def draw_effect_indicators(effects, current_time):
 
 
 def draw_window(paddle1, paddle2, ball, score1, score2, power_up=None,
-                effects=None, current_time=0, show_ready=False):
+                asteroids=None, effects=None, current_time=0, show_ready=False):
     WIN.fill((0, 0, 0))
     for star in stars:
         x, y = scale_pos(star[0], star[1])
@@ -289,6 +319,8 @@ def draw_window(paddle1, paddle2, ball, score1, score2, power_up=None,
         pygame.draw.rect(WIN, WHITE, scale_rect(pygame.Rect(BASE_WIDTH // 2 - 1, y, 2, 10)))
     paddle1.draw()
     paddle2.draw()
+    for asteroid in asteroids or []:
+        asteroid.draw()
     ball.draw()
     draw_power_up(power_up)
     score_text = FONT.render(f"{score1}  |  {score2}", True, WHITE)
@@ -341,6 +373,26 @@ def apply_power_up(power_up, player, ball, effects, current_time, ball_effect):
         ball_effect = {"factor": factor, "until": current_time + POWER_UP_EFFECT_TIME}
     play_sound("powerup")
     return ball_effect
+
+
+def bounce_ball_off_asteroid(ball, asteroid):
+    """Reflect the ball on the dominant collision axis and move it outside."""
+    ball_x, ball_y = ball.rect.center
+    delta_x = ball_x - asteroid.x
+    delta_y = ball_y - asteroid.y
+    ball_radius = BALL_SIZE / 2
+    if delta_x * delta_x + delta_y * delta_y > (asteroid.radius + ball_radius) ** 2:
+        return False
+
+    if abs(delta_x) >= abs(delta_y):
+        direction = 1 if delta_x >= 0 else -1
+        ball.speed_x = abs(ball.speed_x) * direction
+        ball.rect.centerx = int(asteroid.x + direction * (asteroid.radius + ball_radius))
+    else:
+        direction = 1 if delta_y >= 0 else -1
+        ball.speed_y = abs(ball.speed_y) * direction
+        ball.rect.centery = int(asteroid.y + direction * (asteroid.radius + ball_radius))
+    return True
 
 
 # ---------- Text Input ----------
@@ -442,6 +494,9 @@ def main_game(difficulty="E", max_points=5, two_player=True):
     paddle1 = Paddle(20, BASE_HEIGHT // 2 - PADDLE_HEIGHT // 2)
     paddle2 = Paddle(BASE_WIDTH - 30, BASE_HEIGHT // 2 - PADDLE_HEIGHT // 2)
     ball = Ball(difficulty)
+    asteroid_count = random.randint(1, 2)
+    asteroid_x_positions = (BASE_WIDTH // 2 - 55, BASE_WIDTH // 2 + 55)
+    asteroids = [Asteroid(asteroid_x_positions[index]) for index in range(asteroid_count)]
 
     score1, score2 = 0, 0
     run = True
@@ -461,6 +516,8 @@ def main_game(difficulty="E", max_points=5, two_player=True):
     while run:
         clock.tick(FPS)
         current_time = pygame.time.get_ticks()
+        for asteroid in asteroids:
+            asteroid.move()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -505,6 +562,10 @@ def main_game(difficulty="E", max_points=5, two_player=True):
 
             if ball.move():
                 play_sound("wall")
+
+            for asteroid in asteroids:
+                if bounce_ball_off_asteroid(ball, asteroid):
+                    play_sound("wall")
 
             if ball.rect.colliderect(paddle1.rect):
                 ball.speed_x *= -1
@@ -557,7 +618,7 @@ def main_game(difficulty="E", max_points=5, two_player=True):
                     ball.speed_x *= ball_effect["factor"]
                     ball.speed_y *= ball_effect["factor"]
 
-        draw_window(paddle1, paddle2, ball, score1, score2, power_up, effects,
+        draw_window(paddle1, paddle2, ball, score1, score2, power_up, asteroids, effects,
                     current_time, show_ready=pause_after_score)
 
         if score1 >= max_points:
