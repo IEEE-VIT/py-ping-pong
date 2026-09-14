@@ -308,6 +308,33 @@ def main_game(difficulty="E", max_points=5, two_player=True):
                     paddle2.move(up=False)
                 elif paddle2.rect.centery > ball.rect.centery:
                     paddle2.move(up=True)
+        # Assuming 'difficulty' is your state variable (e.g., 'E', 'C', 'A')
+# Add 'R' as an acceptable state for the menu phase.
+
+if event.type == pygame.KEYDOWN:
+    # Existing key bindings
+    if event.key == pygame.K_e:
+        difficulty = 'E'
+    elif event.key == pygame.K_c:
+        difficulty = 'C'
+    elif event.key == pygame.K_a:
+        difficulty = 'A'
+        
+    # --- ADD THIS: Listen for R key to toggle Random ---
+    elif event.key == pygame.K_r:
+        difficulty = 'R'
+        
+    # --- UPDATE THIS: When ENTER is pressed to start the match ---
+    elif event.key == pygame.K_RETURN:
+        if difficulty == 'R':
+            # Secretly roll one of the three difficulties
+            # This locks it in for the match, overwriting the 'R' state internally
+            locked_difficulty = random.choice(['E', 'C', 'A'])
+        else:
+            locked_difficulty = difficulty
+            
+        # Pass the locked_difficulty to your game loop
+        start_match(locked_difficulty)
 
             ball.move()
 
@@ -436,7 +463,20 @@ def main_menu():
                         max_points -= 1
                 if event.key == pygame.K_l:
                     show_leaderboard_screen()
+# Wherever you format your difficulty text for the screen:
+if difficulty == 'E':
+    display_text = "Difficulty: Easy (E)"
+elif difficulty == 'C':
+    display_text = "Difficulty: Challenging (C)"
+elif difficulty == 'A':
+    display_text = "Difficulty: Advanced (A)"
+    
+# --- ADD THIS: Render the Random difficulty text ---
+elif difficulty == 'R':
+    display_text = "Difficulty: R (Random)"
 
+# Then render `display_text` to your screen...
+# Example (Pygame): font.render(display_text, True, (255, 255, 255))
 
 # ---------- Entry Point ----------
 if __name__ == "__main__":
