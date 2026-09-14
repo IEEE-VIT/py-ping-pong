@@ -165,6 +165,7 @@ class Ball:
 
 
 # ---------- LeaderboarD Utilities ----------
+#random
 def load_leaderboard():
     if not os.path.exists(LEADERBOARD_FILE):
         return []
